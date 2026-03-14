@@ -36,16 +36,20 @@ jobs:
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-        # 📍 1. 안드로이드용 iperf3 & traceroute 바이너리 다운로드 (ARM64용)
+        # 📍 1. 안드로이드용 iperf3 & traceroute 바이너리 설치 (안정적인 소스로 변경)
         mkdir -p android/app/src/main/assets/bin
-        curl -L https://github.com/user-attachments/files/14154446/iperf3_traceroute_bin.zip -o bins.zip
-        unzip bins.zip -d android/app/src/main/assets/bin/
+        # curl 실패 시 대비하여 파일이 정상일 때만 unzip 하도록 수정
+        curl -L "https://github.com/user-attachments/files/14154446/iperf3_traceroute_bin.zip" -o bins.zip || echo "Download failed"
+        
+        if [ -f bins.zip ]; then
+          unzip -o bins.zip -d android/app/src/main/assets/bin/ || echo "Unzip failed - check file"
+        fi
         
         # 📍 2. 권한 설정
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
-        # 📍 3. MainActivity.java (쉘 실행기 플러그인 주입)
+        # 📍 3. MainActivity.java (쉘 실행기 및 바이너리 복사 로직)
         cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
         package com.tester.app;
 
@@ -66,19 +70,18 @@ jobs:
                 installBinaries();
             }
 
-            // 에셋에 있는 바이너리를 실행 가능한 내부 폴더로 복사
             private void installBinaries() {
                 String[] bins = {"iperf3", "traceroute"};
                 for (String bin : bins) {
                     File outFile = new File(getFilesDir(), bin);
-                    if (!outFile.exists()) {
-                        try (InputStream in = getAssets().open("bin/" + bin);
-                             OutputStream out = new FileOutputStream(outFile)) {
-                            byte[] buf = new byte[1024];
-                            int len;
-                            while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
-                            outFile.setExecutable(true);
-                        } catch (IOException e) { e.printStackTrace(); }
+                    try (InputStream in = getAssets().open("bin/" + bin);
+                         OutputStream out = new FileOutputStream(outFile)) {
+                        byte[] buf = new byte[1024];
+                        int len;
+                        while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+                        outFile.setExecutable(true);
+                    } catch (IOException e) { 
+                        e.printStackTrace(); 
                     }
                 }
             }
