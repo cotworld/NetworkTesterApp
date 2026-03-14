@@ -24,7 +24,7 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: 4. 앱 조립 및 iperf3/traceroute 도구 이식
+    - name: 4. 앱 조립 및 모든 네이티브 부품(Shell/Network) 이식
       run: |
         mkdir -p CleanWorkspace/www
         cp index.html speedtest.js style.css speedtest-worker.js CleanWorkspace/www/ 2>/dev/null || true
@@ -36,20 +36,24 @@ jobs:
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
+        # 📍 바이너리 다운로드 및 이식
         mkdir -p android/app/src/main/assets/bin
-        curl -L "https://github.com/user-attachments/files/14154446/iperf3_traceroute_bin.zip" -o bins.zip || echo "Download failed"
+        curl -L "https://github.com/user-attachments/files/14154446/iperf3_traceroute_bin.zip" -o bins.zip
         if [ -f bins.zip ]; then
-          unzip -o bins.zip -d android/app/src/main/assets/bin/ || echo "Unzip failed"
+          unzip -o bins.zip -d android/app/src/main/assets/bin/
         fi
         
+        # 📍 안드로이드 권한 설정 (인터넷/전화/GPS)
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
-        # ▼ 여기서부터 EOF까지 들여쓰기 주의!
+        # 📍 MainActivity.java 완벽 재작성 (등록 순서 및 공개 범위 수정)
         cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
         package com.tester.app;
 
         import android.os.Bundle;
+        import android.telephony.TelephonyManager;
+        import android.content.Context;
         import java.io.*;
         import com.getcapacitor.BridgeActivity;
         import com.getcapacitor.JSObject;
@@ -61,8 +65,12 @@ jobs:
         public class MainActivity extends BridgeActivity {
             @Override
             public void onCreate(Bundle savedInstanceState) {
-                super.onCreate(savedInstanceState);
+                // 1. 부품 등록 (반드시 super.onCreate 전에 해야 함)
                 registerPlugin(ShellExecutorPlugin.class);
+                registerPlugin(NetworkInfoPlugin.class);
+                super.onCreate(savedInstanceState);
+                
+                // 2. 바이너리 설치
                 installBinaries();
             }
 
@@ -76,15 +84,14 @@ jobs:
                         int len;
                         while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
                         outFile.setExecutable(true);
-                    } catch (IOException e) { 
-                        e.printStackTrace(); 
-                    }
+                    } catch (IOException e) { e.printStackTrace(); }
                 }
             }
         }
 
+        // 쉘 실행 부품
         @CapacitorPlugin(name = "ShellExecutor")
-        class ShellExecutorPlugin extends Plugin {
+        public class ShellExecutorPlugin extends Plugin {
             @PluginMethod
             public void runCommand(PluginCall call) {
                 String command = call.getString("command");
@@ -94,17 +101,40 @@ jobs:
                     String binPath = getContext().getFilesDir().getAbsolutePath() + "/" + command;
                     Process process = Runtime.getRuntime().exec(binPath + " " + args);
                     BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                    BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+                    BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
                     String line;
                     while ((line = reader.readLine()) != null) output.append(line).append("\n");
-                    while ((line = errorReader.readLine()) != null) output.append(line).append("\n");
+                    while ((line = errReader.readLine()) != null) output.append(line).append("\n");
                     process.waitFor();
                     JSObject ret = new JSObject();
                     ret.put("result", output.toString());
                     call.resolve(ret);
-                } catch (Exception e) {
-                    call.reject(e.getMessage());
-                }
+                } catch (Exception e) { call.reject(e.getMessage()); }
+            }
+        }
+
+        // 망 정보 추출 부품
+        @CapacitorPlugin(name = "NetworkInfo")
+        public class NetworkInfoPlugin extends Plugin {
+            @PluginMethod
+            public void getDetail(PluginCall call) {
+                TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
+                JSObject ret = new JSObject();
+                try {
+                    String hplmn = tm.getSimOperator();
+                    String hplmnName = "현지심";
+                    if (hplmn.equals("45006")) hplmnName = "LG U+";
+                    else if (hplmn.startsWith("45005")) hplmnName = "SKT";
+                    else if (hplmn.startsWith("45008")) hplmnName = "KT";
+                    
+                    int netType = tm.getDataNetworkType();
+                    String rat = (netType == 20) ? "5G" : "LTE";
+                    
+                    ret.put("hplmnName", hplmnName);
+                    ret.put("operatorName", tm.getNetworkOperatorName());
+                    ret.put("rat", rat);
+                    call.resolve(ret);
+                } catch (Exception e) { call.reject(e.getMessage()); }
             }
         }
         EOF
