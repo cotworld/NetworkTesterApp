@@ -24,26 +24,28 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: 4. 앱 조립 및 권한/보안 설정 강제 주입!
+    - name: 4. 앱 조립 및 통신사/HPLMN 자동 추출 코드 주입
       run: |
         mkdir -p CleanWorkspace/www
-        # 내 웹 파일 4개만 안전하게 무균실로 대피
         cp index.html speedtest.js style.css speedtest-worker.js CleanWorkspace/www/ 2>/dev/null || true
         cp -r www/* CleanWorkspace/www/ 2>/dev/null || true
-        
         cd CleanWorkspace
         npm init -y
         npm install @capacitor/core@latest @capacitor/android@latest @capacitor/geolocation@latest
         npm install -D @capacitor/cli@latest
-        
-        # 뼈대 생성 및 플랫폼 추가
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-        # 📍 안드로이드 앱 보안(HTTP 허용) 및 GPS 권한 주입
+        # 📍 권한 주입 (전화상태 + GPS)
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
-        sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />' android/app/src/main/AndroidManifest.xml
 
+        # 📍 MainActivity.java에 정보 추출 플러그인 주입
+        # 1. 필요한 라이브러리 추가
+        sed -i '/import com.getcapacitor.BridgeActivity;/a import android.telephony.TelephonyManager;\nimport android.content.Context;\nimport com.getcapacitor.JSObject;\nimport com.getcapacitor.annotation.CapacitorPlugin;\nimport com.getcapacitor.Plugin;\nimport com.getcapacitor.PluginCall;\nimport com.getcapacitor.PluginMethod;' android/app/src/main/java/com/tester/app/MainActivity.java
+        
+        # 2. NetworkInfo 플러그인 클래스 주입
+        sed -i '/public class MainActivity/i @CapacitorPlugin(name = "NetworkInfo")\nclass NetworkInfoPlugin extends Plugin {\n    @PluginMethod\n    public void getDetail(PluginCall call) {\n        TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);\n        JSObject ret = new JSObject();\n        \n        // HPLMN (SIM 카드 정보) 추출 및 매핑\n        String hplmn = tm.getSimOperator(); // 예: 45006\n        String hplmnName = "현지심";\n        if (hplmn.equals("45006")) hplmnName = "LG U+";\n        else if (hplmn.startsWith("45005") || hplmn.startsWith("45003")) hplmnName = "SKT";\n        else if (hplmn.startsWith("45008") || hplmn.startsWith("45002")) hplmnName = "KT";\n        \n        // 현재 접속중인 망 이름 (MNO)\n        String operatorName = tm.getNetworkOperatorName();\n        \n        // 현재 망 종류 (RAT) 판별\n        int networkType = tm.getDataNetworkType();\n        String rat = "LTE";\n        if (networkType == 20) rat = "5G"; // NR\n        else if (networkType == 3 || networkType == 8 || networkType == 10) rat = "3G";\n        \n        ret.put("hplmn", hplmn);\n        ret.put("hplmnName", hplmnName);\n        ret.put("operatorName", operatorName);\n        ret.put("rat", rat);\n        call.resolve(ret);\n    }\n}' android/app/src/main/java/com/tester/app/MainActivity.java
     - name: 5. 안드로이드 APK 진짜로 굽기
       run: |
         cd CleanWorkspace/android
