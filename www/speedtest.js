@@ -721,3 +721,29 @@ async function fetchNetworkInfoWithRetry(retryCount = 0) {
 window.addEventListener('load', () => {
     fetchNetworkInfoWithRetry();
 });
+
+async function runShellCommand(cmd, args) {
+    const outputEl = document.getElementById('shell-result');
+    outputEl.textContent = `Executing ${cmd} ${args}...\nPlease wait...`;
+    
+    if (window.Capacitor && window.Capacitor.Plugins.ShellExecutor) {
+        try {
+            const { result } = await window.Capacitor.Plugins.ShellExecutor.runCommand({ command: cmd, args: args });
+            outputEl.textContent = result;
+        } catch (e) {
+            outputEl.textContent = "Error: " + e;
+        }
+    } else {
+        outputEl.textContent = "Only available in Android App mode.";
+    }
+}
+
+document.getElementById('iperfButton').addEventListener('click', () => {
+    const addr = document.getElementById('iperfAddr').value;
+    runShellCommand('iperf3', `-c ${addr} -t 5 -p 5201`);
+});
+
+document.getElementById('traceButton').addEventListener('click', () => {
+    const addr = document.getElementById('iperfAddr').value;
+    runShellCommand('traceroute', addr);
+});

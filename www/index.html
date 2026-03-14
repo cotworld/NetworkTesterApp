@@ -85,6 +85,19 @@
             <div id="upload-result" class="result-item" data-base-text="Upload Speed (10MB)"></div>
             
             <hr>
+        <div class="selection-item">
+            <label for="iperfAddr">iperf3 Server:</label>
+            <input type="text" id="iperfAddr" placeholder="123.456.78.90" value="speedtest.cotworld.synology.me">
+        </div>
+        <div class="button-group">
+            <button id="iperfButton" style="background-color: #e91e63;">Run iperf3 (5s)</button>
+            <button id="traceButton" style="background-color: #673ab7;">Run traceroute</button>
+        </div>
+        <div id="shell-result" style="background: #222; color: #0f0; padding: 10px; font-family: monospace; font-size: 0.8em; white-space: pre-wrap; margin-top: 10px; border-radius: 5px; max-height: 200px; overflow-y: auto;">
+            Terminal Output...
+        </div>
+            <hr>
+            
             
             <div id="youtube-latency" class="result-item"></div>
             <div id="instagram-latency" class="result-item"></div>
