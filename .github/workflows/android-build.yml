@@ -36,22 +36,15 @@ jobs:
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-        # 📍 1. 안드로이드용 iperf3 & traceroute 바이너리 설치 (안정적인 소스로 변경)
         mkdir -p android/app/src/main/assets/bin
-        # curl 실패 시 대비하여 파일이 정상일 때만 unzip 하도록 수정
         curl -L "https://github.com/user-attachments/files/14154446/iperf3_traceroute_bin.zip" -o bins.zip || echo "Download failed"
-        
         if [ -f bins.zip ]; then
-          unzip -o bins.zip -d android/app/src/main/assets/bin/ || echo "Unzip failed - check file"
+          unzip -o bins.zip -d android/app/src/main/assets/bin/ || echo "Unzip failed"
         fi
         
-        # 📍 2. 권한 설정
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
-        # 📍 3. MainActivity.java (쉘 실행기 및 바이너리 복사 로직)
-        cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
-        # 📍 MainActivity.java 파일을 더 튼튼한 구조로 새로 쓰기
         cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
         package com.tester.app;
 
@@ -68,7 +61,6 @@ jobs:
             @Override
             public void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
-                // 부품을 시스템에 공식 등록
                 registerPlugin(ShellExecutorPlugin.class);
                 installBinaries();
             }
@@ -90,7 +82,6 @@ jobs:
             }
         }
 
-        // 플러그인 클래스를 public으로 선언하여 외부(JS)에서 찾을 수 있게 함
         @CapacitorPlugin(name = "ShellExecutor")
         class ShellExecutorPlugin extends Plugin {
             @PluginMethod
@@ -101,15 +92,11 @@ jobs:
                 try {
                     String binPath = getContext().getFilesDir().getAbsolutePath() + "/" + command;
                     Process process = Runtime.getRuntime().exec(binPath + " " + args);
-                    
-                    // 에러 메시지도 함께 읽어오도록 수정
                     BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
                     BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-                    
                     String line;
                     while ((line = reader.readLine()) != null) output.append(line).append("\n");
                     while ((line = errorReader.readLine()) != null) output.append(line).append("\n");
-                    
                     process.waitFor();
                     JSObject ret = new JSObject();
                     ret.put("result", output.toString());
