@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로밍 품질 측정 v1.8 (Roaming Data Quality Test)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header-controls">
+            <button id="theme-toggle">🌙</button>
+        </div>
+        <h1>🌐 로밍 품질 측정 v1.8 (Deep Dive Analysis)</h1>
+        
+        <div id="location-info" class="result-item">
+            <span id="location-text">📍 Click ⟳ to detect location</span>
+            <button id="refreshLocationBtn">⟳</button>
+        </div>
+        <div id="device-info" class="result-item"></div>
+        
+        <div class="selection-group">
+            <div class="selection-item">
+                <label for="countrySelector">국가 (Country):</label>
+                <select id="countrySelector" disabled>
+                    <option value="">DB 로딩중 (Loading DB)...</option>
+                </select>
+            </div>
+            <div class="selection-item">
+                <label for="mnoSelector">통신사 (MNO):</label>
+                <select id="mnoSelector" disabled>
+                    <option value="">국가를 먼저 선택하세요 (Select Country first)</option>
+                </select>
+                <span id="mno-source"></span>
+            </div>
+            <div class="selection-item">
+                <label for="ratSelector">네트워크 (RAT):</label>
+                <select id="ratSelector">
+                    <option value="">선택 (Select)</option>
+                    <option value="5G">5G</option>
+                    <option value="LTE">LTE</option>
+                    <option value="3G">3G</option>
+                    <option value="WiFi">WiFi</option>
+                </select>
+            </div>
+            <div class="selection-item">
+                <label for="testIdSelector">시험번호 (Test SIM):</label>
+                <select id="testIdSelector">
+                    <option value="">선택 (Select)</option>
+                    <option value="LG U+">LG U+</option>
+                    <option value="SKT">SKT</option>
+                    <option value="KT">KT</option>
+                    <option value="트래블심">트래블심 (Travel SIM)</option>
+                    <option value="현지심">현지심 (Local SIM)</option>
+                </select>
+            </div>
+            <div class="selection-item">
+                <label>Test Count:</label>
+                <div class="radio-group">
+                    <input type="radio" id="mode1" name="testMode" value="1회_측정" checked>
+                    <label for="mode1">1 Time</label>
+                    <input type="radio" id="mode3" name="testMode" value="3회_연속측정">
+                    <label for="mode3">3 Times</label>
+                    <input type="radio" id="mode5" name="testMode" value="5회_연속측정">
+                    <label for="mode5">5 Times</label>
+                    <input type="radio" id="mode10" name="testMode" value="10회_연속측정">
+                    <label for="mode10">10 Times</label>
+                </div>
+            </div>
+            <div class="selection-item">
+                <label for="locationInput">장소 (Location - Optional):</label>
+                <input type="text" id="locationInput" placeholder="예: 호텔 로비 (Hotel Lobby)">
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="startButton" disabled>국가, 사업자, 네트워크를 선택하세요 (Select Country, MNO, RAT)</button>
+            <button id="cancelButton" style="display: none;">측정 취소 (Cancel Test)</button>
+        </div>
+        
+        <div id="results">
+            <h2>📊 Real-time Results</h2>
+            <div id="ping-result" class="result-item"></div>
+            <div id="download-result" class="result-item" data-base-text="Download Speed (10MB)"></div>
+            <div id="upload-result" class="result-item" data-base-text="Upload Speed (10MB)"></div>
+            
+            <hr>
+            
+            <div id="youtube-latency" class="result-item"></div>
+            <div id="instagram-latency" class="result-item"></div>
+            <div id="kakaotalk-latency" class="result-item"></div>
+            <div id="naver-latency" class="result-item"></div>
+            <div id="whatsapp-latency" class="result-item"></div>
+            
+            <div id="packet-loss-result" class="result-item" style="align-items: flex-start; flex-direction: column;">
+                <span class="label">
+                    📦 Packet Reliability (S/M/L Analysis) 
+                    <span style="font-size:0.75em; color:#666; font-weight:normal; margin-left:5px;">
+                        Target MTU: S(64)/M(1250)/L(1380)
+                    </span>:
+                </span> 
+                <div id="loss-display" style="margin-top:5px; font-size:0.95em; line-height:1.6; color:#555;">Ready to test...</div>
+            </div>
+        </div>
+
+        <div class="history-controls">
+            <button id="showHistoryButton">기록 보기 (Show History)</button>
+            <button id="exportHistoryButton">기록 CSV로 내보내기 (Export to CSV)</button>
+            <button id="clearHistoryButton">기록 전체 삭제 (Clear All History)</button>
+        </div>
+
+        <div id="history-container" style="display:none;">
+            <h2>📝 측정 기록 (Test History)</h2>
+            <div class="table-wrapper">
+                <table id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>측정 시간</th>
+                            <th>시험번호</th>
+                            <th>국가</th>
+                            <th>통신사</th>
+                            <th>RAT</th>
+                            <th>Mode</th>
+                            <th>Ping</th>
+                            <th>DL(Mbps)</th>
+                            <th>UL(Mbps)</th>
+                            <th style="min-width: 220px;">Loss Analysis (S/M/L)</th>
+                            <th>YouTube</th>
+                            <th>Instagram</th>
+                            <th>Kakao</th>
+                            <th>Naver</th>
+                            <th>WhatsApp</th>
+                            <th>Device</th>
+                            <th>Address</th>
+                            <th>GPS</th>
+                            <th>Manual Loc</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <footer>
+            웹페이지 관련 문의 (Webpage inquiries) : cotworld@gmail.com
+        </footer>
+    </div>
+    <script src="speedtest.js?v=1.8"></script>
+</body>
+</html>

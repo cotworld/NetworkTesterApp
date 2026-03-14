@@ -1,0 +1,397 @@
+/* style.css (v1.4 - 폰트 및 스타일 수정) */
+
+:root {
+    --bg-color: #f4f7f6;
+    --container-bg-color: #ffffff;
+    --text-color: #333;
+    --footer-text-color: #aaa;
+    --border-color: #ddd;
+    --header-bg-color: #f2f2f2;
+    --row-alt-bg-color: #f9f9f9;
+    --button-bg-color: #007bff;
+    --button-hover-bg-color: #0056b3;
+    --button-disabled-bg-color: #a0a0a0;
+    --history-button-bg-color: #f0f0f0;
+    --history-button-hover-bg-color: #e0e0e0;
+    --cancel-button-bg-color: #6c757d;
+    --cancel-button-hover-bg-color: #5a6268;
+    --select-border-color: #ccc;
+    --highlight-green-bg: #e6ffed;
+    --highlight-green-text: #28a745;
+    --highlight-red-bg: #ffebee;
+    --highlight-red-text: #dc3545;
+    --highlight-orange-bg: #fff3e0;
+    --highlight-orange-text: #ff9800;
+    --progress-bar-bg: #e9ecef;
+    --progress-bar-fill: #007bff;
+}
+
+body.dark-theme {
+    --bg-color: #000000;
+    --container-bg-color: #000000;
+    --text-color: #e0e0e0;
+    --footer-text-color: #666;
+    --border-color: #444;
+    --header-bg-color: #2a2a2a;
+    --row-alt-bg-color: #2c2c2c;
+    --button-bg-color: #007bff;
+    --button-hover-bg-color: #0056b3;
+    --button-disabled-bg-color: #555;
+    --history-button-bg-color: #333;
+    --history-button-hover-bg-color: #444;
+    --cancel-button-bg-color: #5a6268;
+    --cancel-button-hover-bg-color: #495057;
+    --select-border-color: #555;
+    --highlight-green-bg: #1c3d2f;
+    --highlight-green-text: #4caf50;
+    --highlight-red-bg: #4d1818;
+    --highlight-red-text: #f44336;
+    --highlight-orange-bg: #4d3c1a;
+    --highlight-orange-text: #ff9800;
+    --progress-bar-bg: #333;
+    --progress-bar-fill: #007bff;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    padding: 20px;
+    box-sizing: border-box;
+    transition: background-color 0.3s, color 0.3s;
+}
+.container {
+    position: relative;
+    text-align: center;
+    background: var(--container-bg-color);
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 95%;
+}
+.header-controls {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+}
+#theme-toggle {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    font-size: 1.5rem;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#startButton {
+    background-color: var(--button-bg-color);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-bottom: 1rem;
+}
+#startButton:disabled {
+    background-color: var(--button-disabled-bg-color);
+    cursor: not-allowed;
+}
+#startButton:hover:not([disabled]) {
+    background-color: var(--button-hover-bg-color);
+}
+#results, #location-info, #device-info {
+    margin-top: 1rem;
+    text-align: left;
+}
+.result-item {
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+    word-break: break-all;
+    font-size: 1.1rem; /* 기본 폰트 크기 살짝 키움 */
+    display: flex; /* Flexbox 추가 */
+    align-items: center; /* 수직 가운데 정렬 */
+}
+.result-item:last-child {
+    border-bottom: none;
+}
+.selection-group {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 15px;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+    padding: 1rem;
+    background-color: var(--row-alt-bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.selection-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+.selection-item label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+.selection-item select, .selection-item input[type="text"] {
+    font-size: 1.1rem;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--select-border-color);
+    min-width: 180px;
+    box-sizing: border-box;
+    background-color: var(--container-bg-color);
+    color: var(--text-color);
+}
+.history-controls {
+    margin: 2rem 0 1rem 0;
+}
+.history-controls button {
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    background-color: var(--history-button-bg-color);
+    color: var(--text-color);
+    cursor: pointer;
+    border-radius: 5px;
+    margin: 5px;
+}
+.history-controls button:hover {
+    background-color: var(--history-button-hover-bg-color);
+}
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+#historyTable {
+    width: 100%;
+    min-width: 800px;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+#historyTable th, #historyTable td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: left;
+    white-space: nowrap;
+}
+#historyTable th {
+    background-color: var(--header-bg-color);
+}
+#historyTable tbody tr:nth-child(even) {
+    background-color: var(--row-alt-bg-color);
+}
+.highlight-green {
+    background-color: var(--highlight-green-bg) !important;
+    color: var(--highlight-green-text);
+    font-weight: bold;
+}
+.highlight-red {
+    background-color: var(--highlight-red-bg) !important;
+    color: var(--highlight-red-text);
+    font-weight: bold;
+}
+.highlight-orange {
+    background-color: var(--highlight-orange-bg) !important;
+    color: var(--highlight-orange-text);
+    font-weight: bold;
+}
+#mno-source {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 4px;
+    height: 1em;
+}
+.radio-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    height: 43px;
+}
+.radio-group label {
+    font-weight: normal;
+    margin-bottom: 0;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.radio-group input[type="radio"] {
+    margin-right: -10px;
+    cursor: pointer;
+}
+.button-group {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    align-items: center;
+}
+#cancelButton {
+    background-color: var(--cancel-button-bg-color);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+#cancelButton:hover {
+    background-color: var(--cancel-button-hover-bg-color);
+}
+#cancelButton:disabled {
+    background-color: #a0a0a0;
+    cursor: not-allowed;
+}
+footer {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    color: var(--footer-text-color);
+}
+
+.progress-container {
+    width: 100%;
+    background-color: var(--progress-bar-bg);
+    border-radius: 5px;
+    position: relative;
+    height: 30px; /* 높이 살짝 키움 */
+    line-height: 30px;
+    color: var(--text-color);
+}
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background-color: var(--progress-bar-fill);
+    border-radius: 5px;
+    transition: width 0.1s linear;
+}
+.progress-text {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    font-weight: bold;
+    font-size: 1rem;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+/* ▼▼▼ [추가] 최종 속도 결과값 스타일 ▼▼▼ */
+.speed-result-value {
+    font-size: 1.5em; /* 다른 텍스트보다 50% 크게 */
+    font-weight: 700; /* 더 굵게 */
+    color: var(--button-bg-color); /* 테마의 강조색 사용 */
+    margin-left: 0.5em; /* 라벨과 간격 */
+}
+
+/* (상단 생략 - 이전과 동일) */
+
+/* ▼▼▼ [추가] 위치 정보 영역 및 새로고침 버튼 스타일 ▼▼▼ */
+#location-info {
+    justify-content: space-between; /* 텍스트와 버튼을 양쪽 끝으로 분리 */
+}
+
+#location-text {
+    text-align: left;
+    margin-right: 15px; /* 버튼과의 간격 */
+}
+
+#refreshLocationBtn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    cursor: pointer;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    font-size: 1.5rem;
+    padding: 0;
+    flex-shrink: 0; /* 컨테이너가 줄어들어도 작아지지 않음 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, transform 0.2s;
+}
+#refreshLocationBtn:hover {
+    background-color: var(--history-button-hover-bg-color);
+    transform: rotate(90deg);
+}
+#refreshLocationBtn:disabled {
+    cursor: not-allowed;
+    transform: none;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ▼▼▼ [추가] 최종 속도 결과값 스타일 ▼▼▼ */
+.speed-result-value {
+    font-size: 1.5em; /* 다른 텍스트보다 50% 크게 */
+    font-weight: 700; /* 더 굵게 */
+    color: var(--button-bg-color); /* 테마의 강조색 사용 */
+    margin-left: 0.5em; /* 라벨과 간격 */
+}
+/* style.css (v1.6 - 스피너 애니메이션 추가) */
+
+/* (상단 생략 - 이전과 동일) */
+
+/* ▼▼▼ [추가] 최종 속도 결과값 스타일 ▼▼▼ */
+.speed-result-value {
+    font-size: 1.5em; /* 다른 텍스트보다 50% 크게 */
+    font-weight: 700; /* 더 굵게 */
+    color: var(--button-bg-color); /* 테마의 강조색 사용 */
+    margin-left: 0.5em; /* 라벨과 간격 */
+}
+
+/* ▼▼▼ [추가] 버튼 로딩 스피너 스타일 ▼▼▼ */
+.button-loading {
+    position: relative;
+    color: transparent !important; /* 기존 텍스트 숨기기 */
+    pointer-events: none; /* 로딩 중 클릭 방지 */
+}
+
+.button-loading .spinner {
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 28px; /* 스피너 크기 */
+    height: 28px;
+    margin: -14px 0 0 -14px; /* 정가운데 정렬 */
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s linear infinite;
+}
+
+.button-loading .button-text {
+    visibility: visible;
+    color: white;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* (기존 스타일 생략 - 이전과 동일) */

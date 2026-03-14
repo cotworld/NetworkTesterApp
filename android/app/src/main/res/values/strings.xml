@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Network Tester</string>
+    <string name="title_activity_main">Network Tester</string>
+    <string name="package_name">com.tester.app</string>
+    <string name="custom_url_scheme">com.tester.app</string>
+</resources>
