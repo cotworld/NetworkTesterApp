@@ -673,43 +673,51 @@ function createOrUpdateProgressBar(el, prg, spd) {
     el.querySelector('.progress-bar').style.width = `${prg * 100}%`; el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
 }
 
-// [추가] 안드로이드 네이티브 정보를 가져와서 화면의 select 박스를 자동으로 선택함
-// [수정] 권한 요청 후 정보를 가져오는 함수
-async function autoSelectNetworkInfo() {
+// [최종] 정보가 들어올 때까지 최대 10번, 1초 간격으로 재시도하는 함수
+async function fetchNetworkInfoWithRetry(retryCount = 0) {
+    if (retryCount > 10) return; // 10번 시도 후 중단
+
     if (window.Capacitor && window.Capacitor.Plugins.NetworkInfo) {
         try {
-            // 1. 정보를 가져오기 전, 혹시 모르니 0.5초 대기
             const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
-            console.log("Native Data:", info);
+            console.log("Native Info:", info);
 
-            // 2. 시험번호 (Test SIM) 자동 선택
+            // 1. 시험번호 (Test SIM) 자동 선택
             const testIdSel = document.getElementById('testIdSelector');
             if (testIdSel && info.hplmnName) {
-                testIdSel.value = info.hplmnName;
-                console.log("SIM Auto-selected:", info.hplmnName);
+                // HTML의 <option> value와 정확히 일치해야 합니다.
+                testIdSel.value = info.hplmnName; 
             }
 
-            // 3. 네트워크 (RAT) 자동 선택
+            // 2. 네트워크 (RAT) 자동 선택
             const ratSel = document.getElementById('ratSelector');
             if (ratSel && info.rat) {
                 ratSel.value = info.rat;
-                console.log("RAT Auto-selected:", info.rat);
             }
 
-            // 4. 통신사 (MNO) 보조 텍스트 표시
+            // 3. 통신사 (MNO) 보조 표시
             const mnoSource = document.getElementById('mno-source');
             if (mnoSource && info.operatorName) {
                 mnoSource.innerText = ` (현재: ${info.operatorName})`;
             }
 
+            // 정보를 성공적으로 가져왔고, 값이 채워졌다면 종료
+            if (info.hplmnName || info.rat) {
+                console.log("자동 입력 성공!");
+                if (typeof checkSelections === 'function') checkSelections(); // 📍 이 줄을 추가해 주세요!
+                return; 
+            }
+
         } catch (e) {
-            console.error("정보 가져오기 실패. 권한이 거부되었거나 플러그인 오류입니다.", e);
+            console.log(`시도 ${retryCount + 1}: 권한 대기 중...`);
         }
     }
+
+    // 실패하거나 값이 없으면 1초 뒤 다시 시도
+    setTimeout(() => fetchNetworkInfoWithRetry(retryCount + 1), 1000);
 }
 
 // 앱 실행 시 실행
 window.addEventListener('load', () => {
-    // 2초 뒤 실행 (앱 초기화 완료 대기)
-    setTimeout(autoSelectNetworkInfo, 2000);
+    fetchNetworkInfoWithRetry();
 });
