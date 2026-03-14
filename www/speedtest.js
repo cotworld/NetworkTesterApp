@@ -674,42 +674,42 @@ function createOrUpdateProgressBar(el, prg, spd) {
 }
 
 // [추가] 안드로이드 네이티브 정보를 가져와서 화면의 select 박스를 자동으로 선택함
+// [수정] 권한 요청 후 정보를 가져오는 함수
 async function autoSelectNetworkInfo() {
     if (window.Capacitor && window.Capacitor.Plugins.NetworkInfo) {
         try {
-            // 안드로이드 자바 코드에서 정보를 가져옴
+            // 1. 정보를 가져오기 전, 혹시 모르니 0.5초 대기
             const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
-            console.log("Native Info Received:", info);
+            console.log("Native Data:", info);
 
-            // 1. 시험번호 (Test SIM / HPLMN 기반) 자동 선택
-            const testIdSelector = document.getElementById('testIdSelector');
-            if (testIdSelector && info.hplmnName) {
-                testIdSelector.value = info.hplmnName;
+            // 2. 시험번호 (Test SIM) 자동 선택
+            const testIdSel = document.getElementById('testIdSelector');
+            if (testIdSel && info.hplmnName) {
+                testIdSel.value = info.hplmnName;
+                console.log("SIM Auto-selected:", info.hplmnName);
             }
 
-            // 2. 네트워크 (RAT) 자동 선택
-            const ratSelector = document.getElementById('rat-select'); // HTML엔 ratSelector인데 id확인 필요
-            // 만약 ID가 ratSelector라면 아래줄 사용
+            // 3. 네트워크 (RAT) 자동 선택
             const ratSel = document.getElementById('ratSelector');
             if (ratSel && info.rat) {
                 ratSel.value = info.rat;
+                console.log("RAT Auto-selected:", info.rat);
             }
 
-            // 3. 통신사 (MNO) 자동 선택
-            // 현재 국가를 선택해야 MNO가 활성화되므로, 
-            // 우선 '지금 접속된 사업자 이름'을 텍스트로 먼저 보여줍니다.
+            // 4. 통신사 (MNO) 보조 텍스트 표시
             const mnoSource = document.getElementById('mno-source');
-            if (mnoSource) {
-                mnoSource.innerText = ` (현재 접속: ${info.operatorName})`;
+            if (mnoSource && info.operatorName) {
+                mnoSource.innerText = ` (현재: ${info.operatorName})`;
             }
 
         } catch (e) {
-            console.error("Native 연동 실패:", e);
+            console.error("정보 가져오기 실패. 권한이 거부되었거나 플러그인 오류입니다.", e);
         }
     }
 }
 
-// 페이지 로딩 완료 후 1.5초 뒤에 실행 (네이티브 준비 시간 고려)
+// 앱 실행 시 실행
 window.addEventListener('load', () => {
-    setTimeout(autoSelectNetworkInfo, 1500);
+    // 2초 뒤 실행 (앱 초기화 완료 대기)
+    setTimeout(autoSelectNetworkInfo, 2000);
 });
