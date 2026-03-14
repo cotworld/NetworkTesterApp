@@ -1,5 +1,9 @@
 // speedtest.js (v1.8 - Dynamic UDP Loss & Micro-Gap Architecture)
 
+// ▼ 서버 주소 하드코딩 (앱 빌드용) ▼
+const SERVER_URL = "https://speedtest.cotworld.synology.me:7749";
+const WS_URL = "wss://speedtest.cotworld.synology.me:3002";
+
 let fullMnoDatabase = {};
 let isDbLoadedFromWeb = false;
 
@@ -325,8 +329,7 @@ async function measurePacketLossDeepDive() {
         lossDisplay.innerHTML = "<span style='color:orange'>Warmup & Analysis...</span>";
     }
 
-    const protocol = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';
-    const socketUrl = `${protocol}${window.location.hostname}:3002`;
+    const socketUrl = WS_URL;
     
     // [v1.8] Size Optimization
     const SIZE_S = 64;   // VoIP / Ping Level
@@ -553,7 +556,8 @@ async function measureSpeedWithWorker(type) {
         };
         speedtestWorker.addEventListener('message', handler);
         const size = 10 * 1024 * 1024; 
-        speedtestWorker.postMessage({ type: (type === 'download' ? 'start-download' : 'start-upload'), url: (type === 'download' ? '/download.php' : '/upload.php'), size });
+        // url 부분에 SERVER_URL + 를 붙여줍니다.
+        speedtestWorker.postMessage({ type: (type === 'download' ? 'start-download' : 'start-upload'), url: (type === 'download' ? SERVER_URL + '/download.php' : SERVER_URL + '/upload.php'), size });
     });
 }
 async function measureLatency() {
@@ -561,7 +565,7 @@ async function measureLatency() {
     for (let i = 0; i < 3; i++) {
         try {
             const start = Date.now();
-            await fetch('/ping.txt?r=' + Math.random(), { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(3000) });
+            await fetch(SERVER_URL + '/ping.txt?r=' + Math.random(), { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(3000) });
             pingTimes.push(Date.now() - start);
             await new Promise(r => setTimeout(r, 250));
         } catch (e) { return { avg: 'N/A' }; }
