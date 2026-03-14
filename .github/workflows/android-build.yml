@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -13,31 +13,40 @@ jobs:
     - name: 1. 내 코드 가져오기
       uses: actions/checkout@v4
 
-    - name: 2. 웹 도구(Node.js) 세팅하기
+    - name: 2. 파일 위치 강제 정렬 (폴더 꼬임 완벽 방지)
+      run: |
+        mkdir -p www
+        mv index.html speedtest.js style.css speedtest-worker.js www/ 2>/dev/null || true
+
+    - name: 3. 웹 도구(Node.js) 세팅하기
       uses: actions/setup-node@v4
       with:
         node-version: '20'
 
-    - name: 3. 꼬인 폴더 삭제하고 안드로이드 뼈대 새로 만들기!
-      run: |
-        npm install @capacitor/core @capacitor/cli @capacitor/android
-        rm -rf android
-        npx cap add android
-        npx cap sync
-
-    - name: 4. 안드로이드 빌드용 Java(JDK) 세팅하기
+    - name: 4. 안드로이드 빌드용 Java 세팅
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: 5. 안드로이드 APK 파일 진짜로 굽기!
+    - name: 5. 윈도우 환경 충돌 제거 및 뼈대 강제 초기화!
+      run: |
+        npm init -y
+        npm install @capacitor/core @capacitor/cli @capacitor/android
+        npx cap init "Network Tester" "com.tester.app" --web-dir www --force || true
+        rm -rf android
+        npx cap add android
+        npx cap sync android
+
+    - name: 6. 언어 장벽(CRLF) 번역 및 APK 파일 굽기
       run: |
         cd android
+        sudo apt-get install -y dos2unix
+        dos2unix gradlew
         chmod +x gradlew
         ./gradlew assembleDebug
 
-    - name: 6. 구워진 APK 파일 다운로드할 수 있게 올리기
+    - name: 7. 구워진 APK 파일 다운로드할 수 있게 올리기
       uses: actions/upload-artifact@v4
       with:
         name: NetworkTester-App
