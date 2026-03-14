@@ -13,40 +13,37 @@ jobs:
     - name: 1. 내 깃허브 코드 가져오기
       uses: actions/checkout@v4
 
-    - name: 2. 빌드 환경 세팅 (Node.js 20 & Java 17)
+    - name: 2. 빌드 환경 세팅 (Node.js 20)
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-    - uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '17'
 
-    - name: 3. 내 파일만 쏙 빼서 백지상태에서 앱 조립하기!
+    - name: 3. 안드로이드 빌드용 Java 세팅 (🔥 Java 21로 업데이트!)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: 4. 내 파일만 쏙 빼서 백지상태에서 앱 조립하기!
       run: |
-        # 1. 아예 새로운 무균실(작업장) 만들기
         mkdir -p CleanWorkspace/www
-        
-        # 2. 기존 설정 싹 다 무시하고 진짜 '웹 파일(알맹이)'만 안전하게 무균실로 대피
-        cp *.* CleanWorkspace/www/ 2>/dev/null || true
+        # 내 웹 파일 4개만 안전하게 무균실로 대피
+        cp index.html speedtest.js style.css speedtest-worker.js CleanWorkspace/www/ 2>/dev/null || true
         cp -r www/* CleanWorkspace/www/ 2>/dev/null || true
-        
-        # 3. 무균실로 이동
         cd CleanWorkspace
-        
-        # 4. 리눅스 서버가 직접 뼈대 100% 새로 생성 (윈도우 오류 개입 확률 0%)
         npm init -y
-        npm install @capacitor/core @capacitor/cli @capacitor/android
+        npm install @capacitor/core@latest @capacitor/android@latest
+        npm install -D @capacitor/cli@latest
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-    - name: 4. 안드로이드 APK 진짜로 굽기
+    - name: 5. 안드로이드 APK 진짜로 굽기
       run: |
         cd CleanWorkspace/android
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --no-daemon
 
-    - name: 5. 완성된 APK 다운로드 링크 만들기
+    - name: 6. 완성된 APK 다운로드 링크 만들기
       uses: actions/upload-artifact@v4
       with:
         name: NetworkTester-App
