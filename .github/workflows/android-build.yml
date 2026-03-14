@@ -24,7 +24,7 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: 4. 앱 조립 및 네이티브 정보 추출/권한 코드 주입
+    - name: 4. 앱 조립 및 네이티브 코드 완벽 주입
       run: |
         mkdir -p CleanWorkspace/www
         cp index.html speedtest.js style.css speedtest-worker.js CleanWorkspace/www/ 2>/dev/null || true
@@ -36,20 +36,66 @@ jobs:
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-        # 📍 권한 설정 (전화상태 + GPS)
+        # 📍 1. 권한 설정 (GPS + 전화상태)
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />' android/app/src/main/AndroidManifest.xml
 
-        # 📍 MainActivity.java 수정 (부품 등록 및 권한 체크 로직)
-        # 1. 필요한 라이브러리 추가
-        sed -i '/import com.getcapacitor.BridgeActivity;/a import android.telephony.TelephonyManager;\nimport android.content.Context;\nimport android.os.Bundle;\nimport androidx.core.app.ActivityCompat;\nimport android.content.pm.PackageManager;\nimport com.getcapacitor.JSObject;\nimport com.getcapacitor.annotation.CapacitorPlugin;\nimport com.getcapacitor.Plugin;\nimport com.getcapacitor.PluginCall;\nimport com.getcapacitor.PluginMethod;' android/app/src/main/java/com/tester/app/MainActivity.java
-        
-        # 2. 실행 시 전화 권한 팝업 강제로 띄우기
-        sed -i '/public class MainActivity/a \    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);\n        registerPlugin(NetworkInfoPlugin.class);\n        if (ActivityCompat.checkSelfPermission(this, "android.permission.READ_PHONE_STATE") != PackageManager.PERMISSION_GRANTED) {\n            ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_PHONE_STATE"}, 101);\n        }\n    }' android/app/src/main/java/com/tester/app/MainActivity.java
+        # 📍 2. MainActivity.java 파일을 완벽한 구조로 새로 쓰기 (문법 에러 원천 차단)
+        cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
+        package com.tester.app;
 
-        # 3. NetworkInfo 플러그인 클래스 정의
-        sed -i '/public class MainActivity/i @CapacitorPlugin(name = "NetworkInfo")\nclass NetworkInfoPlugin extends Plugin {\n    @PluginMethod\n    public void getDetail(PluginCall call) {\n        TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);\n        JSObject ret = new JSObject();\n        try {\n            String hplmn = tm.getSimOperator();\n            String hplmnName = "현지심";\n            if (hplmn.equals("45006")) hplmnName = "LG U+";\n            else if (hplmn.startsWith("45005") || hplmn.startsWith("45003")) hplmnName = "SKT";\n            else if (hplmn.startsWith("45008") || hplmn.startsWith("45002")) hplmnName = "KT";\n            \n            String opName = tm.getNetworkOperatorName();\n            int netType = tm.getDataNetworkType();\n            String rat = "LTE";\n            if (netType == 20) rat = "5G";\n            \n            ret.put("hplmnName", hplmnName);\n            ret.put("operatorName", opName);\n            ret.put("rat", rat);\n            call.resolve(ret);\n        } catch (Exception e) {\n            call.reject(e.getMessage());\n        }\n    }\n}' android/app/src/main/java/com/tester/app/MainActivity.java
- 
+        import android.os.Bundle;
+        import android.telephony.TelephonyManager;
+        import android.content.Context;
+        import androidx.core.app.ActivityCompat;
+        import android.content.pm.PackageManager;
+        import com.getcapacitor.BridgeActivity;
+        import com.getcapacitor.JSObject;
+        import com.getcapacitor.annotation.CapacitorPlugin;
+        import com.getcapacitor.Plugin;
+        import com.getcapacitor.PluginCall;
+        import com.getcapacitor.PluginMethod;
+
+        public class MainActivity extends BridgeActivity {
+            @Override
+            public void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                registerPlugin(NetworkInfoPlugin.class);
+                // 실행 시 전화 권한 요청
+                if (ActivityCompat.checkSelfPermission(this, "android.permission.READ_PHONE_STATE") != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_PHONE_STATE"}, 101);
+                }
+            }
+        }
+
+        @CapacitorPlugin(name = "NetworkInfo")
+        class NetworkInfoPlugin extends Plugin {
+            @PluginMethod
+            public void getDetail(PluginCall call) {
+                TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
+                JSObject ret = new JSObject();
+                try {
+                    String hplmn = tm.getSimOperator();
+                    String hplmnName = "현지심";
+                    if (hplmn.equals("45006")) hplmnName = "LG U+";
+                    else if (hplmn.startsWith("45005") || hplmn.startsWith("45003")) hplmnName = "SKT";
+                    else if (hplmn.startsWith("45008") || hplmn.startsWith("45002")) hplmnName = "KT";
+                    
+                    String opName = tm.getNetworkOperatorName();
+                    int netType = tm.getDataNetworkType();
+                    String rat = "LTE";
+                    if (netType == 20) rat = "5G";
+                    
+                    ret.put("hplmnName", hplmnName);
+                    ret.put("operatorName", opName);
+                    ret.put("rat", rat);
+                    call.resolve(ret);
+                } catch (Exception e) {
+                    call.reject(e.getMessage());
+                }
+            }
+        }
+        EOF
     
     - name: 5. 안드로이드 APK 진짜로 굽기
       run: |
