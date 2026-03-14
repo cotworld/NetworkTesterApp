@@ -13,7 +13,7 @@ jobs:
     - name: 1. 내 깃허브 코드 가져오기
       uses: actions/checkout@v4
 
-    - name: 2. 빌드 환경 세팅 (🔥 Node.js 22 강제 고정)
+    - name: 2. 빌드 환경 세팅 (Node.js 22 강제 고정)
       uses: actions/setup-node@v4
       with:
         node-version: 22
@@ -24,7 +24,7 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: 4. 앱 조립 및 바이너리 보안 우회 설치
+    - name: 4. 앱 조립 및 강제 주입 (IP 변경, SIM 자동입력, 보안 우회)
       run: |
         mkdir -p CleanWorkspace/www
         cp index.html speedtest.js style.css speedtest-worker.js CleanWorkspace/www/ 2>/dev/null || true
@@ -36,15 +36,55 @@ jobs:
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-        # 📍 실행 파일을 시스템 라이브러리(.so)로 변장시켜서 이식
+        # 📍 [마법 1] JS 파일 끝에 'IP 변경'과 'SIM 자동입력' 로직을 강제로 주입합니다.
+        cat << 'EOF' >> www/speedtest.js
+        
+        // --- 🚀 FORCE INJECTED LOGIC ---
+        window.addEventListener('load', () => {
+            // 1. iperf3 주소를 180.228.85.25로 강제 변경
+            const iperfHostInput = document.getElementById('iperfHost') || document.getElementById('iperfAddr');
+            if (iperfHostInput) iperfHostInput.value = '180.228.85.25';
+
+            // 2. SIM 정보 자동 채우기 (플러그인 응답 올 때까지 10번 재시도)
+            async function forceFetchNetworkInfo(retryCount = 0) {
+                if (retryCount > 10) return;
+                const isApp = window.Capacitor && window.Capacitor.isNativePlatform();
+                if (isApp && window.Capacitor.Plugins.NetworkInfo) {
+                    try {
+                        const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
+                        let isSuccess = false;
+                        
+                        const testIdSel = document.getElementById('testIdSelector');
+                        if (testIdSel && info.hplmnName) { testIdSel.value = info.hplmnName; isSuccess = true; }
+                        
+                        const ratSel = document.getElementById('ratSelector');
+                        if (ratSel && info.rat) { ratSel.value = info.rat; isSuccess = true; }
+                        
+                        const mnoSource = document.getElementById('mno-source');
+                        if (mnoSource && info.operatorName) { mnoSource.innerText = ` (현재: ${info.operatorName})`; }
+                        
+                        if (isSuccess) {
+                            if (typeof checkSelections === 'function') checkSelections();
+                            return; // 성공 시 반복 종료
+                        }
+                    } catch (e) { console.log("권한 대기 중..."); }
+                }
+                setTimeout(() => forceFetchNetworkInfo(retryCount + 1), 1000);
+            }
+            forceFetchNetworkInfo();
+        });
+        EOF
+
+        # 📍 [마법 2] 실행 파일을 라이브러리(.so)로 변장
         mkdir -p android/app/src/main/jniLibs/arm64-v8a
         cp ../iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so 2>/dev/null || cp ../bin/iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so || echo "iperf3 missing"
         cp ../traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so 2>/dev/null || cp ../bin/traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so || echo "traceroute missing"
         
+        # 권한 부여
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
-        # 📍 MainActivity.java (변장된 .so 파일을 정확히 실행하는 로직)
+        # 📍 [마법 3] 자바 클래스 구조 완벽 안정화 (에러 원천 차단)
         cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
         package com.tester.app;
 
@@ -66,49 +106,49 @@ jobs:
                 registerPlugin(NetworkInfoPlugin.class);
                 super.onCreate(savedInstanceState);
             }
-        }
 
-        @CapacitorPlugin(name = "ShellExecutor")
-        class ShellExecutorPlugin extends Plugin {
-            @PluginMethod
-            public void runCommand(PluginCall call) {
-                String command = call.getString("command");
-                String args = call.getString("args");
-                StringBuilder output = new StringBuilder();
-                try {
-                    String nativeLibDir = getContext().getApplicationInfo().nativeLibraryDir;
-                    String binPath = nativeLibDir + "/lib" + command + ".so";
-                    Process process = Runtime.getRuntime().exec(binPath + " " + args);
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                    BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-                    String line;
-                    while ((line = reader.readLine()) != null) output.append(line).append("\n");
-                    while ((line = errReader.readLine()) != null) output.append(line).append("\n");
-                    process.waitFor();
-                    JSObject ret = new JSObject();
-                    ret.put("result", output.toString());
-                    call.resolve(ret);
-                } catch (Exception e) { call.reject(e.getMessage()); }
+            @CapacitorPlugin(name = "ShellExecutor")
+            public static class ShellExecutorPlugin extends Plugin {
+                @PluginMethod
+                public void runCommand(PluginCall call) {
+                    String command = call.getString("command");
+                    String args = call.getString("args");
+                    StringBuilder output = new StringBuilder();
+                    try {
+                        String nativeLibDir = getContext().getApplicationInfo().nativeLibraryDir;
+                        String binPath = nativeLibDir + "/lib" + command + ".so";
+                        Process process = Runtime.getRuntime().exec(binPath + " " + args);
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                        BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+                        String line;
+                        while ((line = reader.readLine()) != null) output.append(line).append("\n");
+                        while ((line = errReader.readLine()) != null) output.append(line).append("\n");
+                        process.waitFor();
+                        JSObject ret = new JSObject();
+                        ret.put("result", output.toString());
+                        call.resolve(ret);
+                    } catch (Exception e) { call.reject(e.getMessage()); }
+                }
             }
-        }
 
-        @CapacitorPlugin(name = "NetworkInfo")
-        class NetworkInfoPlugin extends Plugin {
-            @PluginMethod
-            public void getDetail(PluginCall call) {
-                TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
-                JSObject ret = new JSObject();
-                try {
-                    String hplmn = tm.getSimOperator();
-                    String hplmnName = "현지심";
-                    if ("45006".equals(hplmn)) hplmnName = "LG U+";
-                    else if (hplmn != null && hplmn.startsWith("45005")) hplmnName = "SKT";
-                    else if (hplmn != null && hplmn.startsWith("45008")) hplmnName = "KT";
-                    ret.put("hplmnName", hplmnName);
-                    ret.put("operatorName", tm.getNetworkOperatorName());
-                    ret.put("rat", (tm.getDataNetworkType() == 20) ? "5G" : "LTE");
-                    call.resolve(ret);
-                } catch (Exception e) { call.reject(e.getMessage()); }
+            @CapacitorPlugin(name = "NetworkInfo")
+            public static class NetworkInfoPlugin extends Plugin {
+                @PluginMethod
+                public void getDetail(PluginCall call) {
+                    TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
+                    JSObject ret = new JSObject();
+                    try {
+                        String hplmn = tm.getSimOperator();
+                        String hplmnName = "현지심";
+                        if ("45006".equals(hplmn)) hplmnName = "LG U+";
+                        else if (hplmn != null && hplmn.startsWith("45005")) hplmnName = "SKT";
+                        else if (hplmn != null && hplmn.startsWith("45008")) hplmnName = "KT";
+                        ret.put("hplmnName", hplmnName);
+                        ret.put("operatorName", tm.getNetworkOperatorName());
+                        ret.put("rat", (tm.getDataNetworkType() == 20) ? "5G" : "LTE");
+                        call.resolve(ret);
+                    } catch (Exception e) { call.reject(e.getMessage()); }
+                }
             }
         }
         EOF
