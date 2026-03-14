@@ -13,10 +13,10 @@ jobs:
     - name: 1. 내 깃허브 코드 가져오기
       uses: actions/checkout@v4
 
-    - name: 2. 빌드 환경 세팅 (🔥 Node.js 22 고정)
+    - name: 2. 빌드 환경 세팅 (🔥 Node.js 22 강제 고정)
       uses: actions/setup-node@v4
       with:
-        node-version: '22'
+        node-version: 22 # 📍 여기서 22로 확실히 잡아줍니다.
 
     - name: 3. 안드로이드 빌드용 Java 세팅 (Java 21)
       uses: actions/setup-java@v4
@@ -31,20 +31,24 @@ jobs:
         cp -r www/* CleanWorkspace/www/ 2>/dev/null || true
         cd CleanWorkspace
         npm init -y
+        # Capacitor 최신 버전 설치
         npm install @capacitor/core@latest @capacitor/android@latest @capacitor/geolocation@latest
         npm install -D @capacitor/cli@latest
+        
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-        # 📍 [핵심] 실행 파일을 시스템 라이브러리 폴더로 강제 이동 (보안 우회)
+        # 📍 [핵심] 실행 파일을 시스템 라이브러리(.so)로 변장시켜서 강제 이식
         mkdir -p android/app/src/main/jniLibs/arm64-v8a
+        # 루트나 bin 폴더 어디에 있든 찾아서 'lib' 접두사를 붙여 복사합니다.
         cp ../iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so 2>/dev/null || cp ../bin/iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so || echo "iperf3 missing"
         cp ../traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so 2>/dev/null || cp ../bin/traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so || echo "traceroute missing"
         
+        # 권한 설정 (보안 정책 반영)
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
-        # 📍 MainActivity.java (보안 우회 경로로 실행하도록 수정)
+        # 📍 MainActivity.java 수정 (변장된 .so 파일을 실행하는 로직)
         cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
         package com.tester.app;
 
@@ -75,7 +79,7 @@ jobs:
                     String args = call.getString("args");
                     StringBuilder output = new StringBuilder();
                     try {
-                        // 📍 안드로이드 10 이상 보안 우회: 시스템이 설치한 lib 폴더에서 실행
+                        // 📍 안드로이드 시스템이 자동으로 압축을 푼 라이브러리 폴더 경로를 가져옵니다.
                         String nativeLibDir = getContext().getApplicationInfo().nativeLibraryDir;
                         String binPath = nativeLibDir + "/lib" + command + ".so";
                         
