@@ -24,7 +24,7 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: 4. 앱 조립 및 네이티브 코드 완벽 주입
+    - name: 4. 앱 조립 및 iperf3/traceroute 도구 이식
       run: |
         mkdir -p CleanWorkspace/www
         cp index.html speedtest.js style.css speedtest-worker.js CleanWorkspace/www/ 2>/dev/null || true
@@ -36,19 +36,21 @@ jobs:
         npx cap init "Network Tester" "com.tester.app" --web-dir www
         npx cap add android
 
-        # 📍 1. 권한 설정 (GPS + 전화상태)
+        # 📍 1. 안드로이드용 iperf3 & traceroute 바이너리 다운로드 (ARM64용)
+        mkdir -p android/app/src/main/assets/bin
+        curl -L https://github.com/user-attachments/files/14154446/iperf3_traceroute_bin.zip -o bins.zip
+        unzip bins.zip -d android/app/src/main/assets/bin/
+        
+        # 📍 2. 권한 설정
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
-        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />' android/app/src/main/AndroidManifest.xml
+        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
-        # 📍 2. MainActivity.java 파일을 완벽한 구조로 새로 쓰기 (문법 에러 원천 차단)
+        # 📍 3. MainActivity.java (쉘 실행기 플러그인 주입)
         cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
         package com.tester.app;
 
         import android.os.Bundle;
-        import android.telephony.TelephonyManager;
-        import android.content.Context;
-        import androidx.core.app.ActivityCompat;
-        import android.content.pm.PackageManager;
+        import java.io.*;
         import com.getcapacitor.BridgeActivity;
         import com.getcapacitor.JSObject;
         import com.getcapacitor.annotation.CapacitorPlugin;
@@ -60,35 +62,46 @@ jobs:
             @Override
             public void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
-                registerPlugin(NetworkInfoPlugin.class);
-                // 실행 시 전화 권한 요청
-                if (ActivityCompat.checkSelfPermission(this, "android.permission.READ_PHONE_STATE") != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(this, new String[]{"android.permission.READ_PHONE_STATE"}, 101);
+                registerPlugin(ShellExecutorPlugin.class);
+                installBinaries();
+            }
+
+            // 에셋에 있는 바이너리를 실행 가능한 내부 폴더로 복사
+            private void installBinaries() {
+                String[] bins = {"iperf3", "traceroute"};
+                for (String bin : bins) {
+                    File outFile = new File(getFilesDir(), bin);
+                    if (!outFile.exists()) {
+                        try (InputStream in = getAssets().open("bin/" + bin);
+                             OutputStream out = new FileOutputStream(outFile)) {
+                            byte[] buf = new byte[1024];
+                            int len;
+                            while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+                            outFile.setExecutable(true);
+                        } catch (IOException e) { e.printStackTrace(); }
+                    }
                 }
             }
         }
 
-        @CapacitorPlugin(name = "NetworkInfo")
-        class NetworkInfoPlugin extends Plugin {
+        @CapacitorPlugin(name = "ShellExecutor")
+        class ShellExecutorPlugin extends Plugin {
             @PluginMethod
-            public void getDetail(PluginCall call) {
-                TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
-                JSObject ret = new JSObject();
+            public void runCommand(PluginCall call) {
+                String command = call.getString("command");
+                String args = call.getString("args");
+                StringBuilder output = new StringBuilder();
                 try {
-                    String hplmn = tm.getSimOperator();
-                    String hplmnName = "현지심";
-                    if (hplmn.equals("45006")) hplmnName = "LG U+";
-                    else if (hplmn.startsWith("45005") || hplmn.startsWith("45003")) hplmnName = "SKT";
-                    else if (hplmn.startsWith("45008") || hplmn.startsWith("45002")) hplmnName = "KT";
-                    
-                    String opName = tm.getNetworkOperatorName();
-                    int netType = tm.getDataNetworkType();
-                    String rat = "LTE";
-                    if (netType == 20) rat = "5G";
-                    
-                    ret.put("hplmnName", hplmnName);
-                    ret.put("operatorName", opName);
-                    ret.put("rat", rat);
+                    String binPath = getContext().getFilesDir().getAbsolutePath() + "/" + command;
+                    Process process = Runtime.getRuntime().exec(binPath + " " + args);
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                    }
+                    process.waitFor();
+                    JSObject ret = new JSObject();
+                    ret.put("result", output.toString());
                     call.resolve(ret);
                 } catch (Exception e) {
                     call.reject(e.getMessage());
