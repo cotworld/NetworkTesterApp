@@ -722,19 +722,31 @@ window.addEventListener('load', () => {
     fetchNetworkInfoWithRetry();
 });
 
+// [수정] 앱 모드인지 더 정확하게 체크하고 실행
 async function runShellCommand(cmd, args) {
     const outputEl = document.getElementById('shell-result');
-    outputEl.textContent = `Executing ${cmd} ${args}...\nPlease wait...`;
-    
-    if (window.Capacitor && window.Capacitor.Plugins.ShellExecutor) {
+    outputEl.textContent = `[Executing] ${cmd} ${args}\nWaiting for response...`;
+
+    // Capacitor 엔진이 로드되었는지 확인
+    const isApp = window.Capacitor && window.Capacitor.isNativePlatform();
+
+    if (isApp) {
         try {
-            const { result } = await window.Capacitor.Plugins.ShellExecutor.runCommand({ command: cmd, args: args });
-            outputEl.textContent = result;
+            // Plugins 안의 ShellExecutor를 직접 호출
+            const ShellExecutor = window.Capacitor.Plugins.ShellExecutor;
+            
+            if (ShellExecutor) {
+                const { result } = await ShellExecutor.runCommand({ command: cmd, args: args });
+                outputEl.textContent = result || "Success (No output)";
+            } else {
+                outputEl.textContent = "❌ ShellExecutor Plugin not found in App.";
+            }
         } catch (e) {
-            outputEl.textContent = "Error: " + e;
+            outputEl.textContent = "❌ Execution Error: " + e;
         }
     } else {
-        outputEl.textContent = "Only available in Android App mode.";
+        // 브라우저에서 실행했을 때 뜨는 메시지
+        outputEl.textContent = "⚠️ iperf3/traceroute는 안드로이드 앱 설치본에서만 작동합니다.";
     }
 }
 
