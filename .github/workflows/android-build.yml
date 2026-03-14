@@ -13,12 +13,12 @@ jobs:
     - name: 1. 내 깃허브 코드 가져오기
       uses: actions/checkout@v4
 
-    - name: 2. 빌드 환경 세팅 (Node.js 20)
+    - name: 2. 빌드 환경 세팅 (🔥 Node.js 22로 업데이트!)
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
 
-    - name: 3. 안드로이드 빌드용 Java 세팅 (🔥 Java 21로 업데이트!)
+    - name: 3. 안드로이드 빌드용 Java 세팅
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
