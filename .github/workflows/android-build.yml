@@ -13,7 +13,7 @@ jobs:
     - name: 1. 내 깃허브 코드 가져오기
       uses: actions/checkout@v4
 
-    - name: 2. 빌드 환경 세팅 (🔥 Node.js 22로 확실히 고정!)
+    - name: 2. 빌드 환경 세팅 (Node.js 22)
       uses: actions/setup-node@v4
       with:
         node-version: '22'
@@ -45,6 +45,7 @@ jobs:
         sed -i 's/<application/<application android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
+        # ▼ 여기서부터 EOF까지 들여쓰기 주의!
         cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
         package com.tester.app;
 
@@ -107,7 +108,7 @@ jobs:
             }
         }
         EOF
-    
+
     - name: 5. 안드로이드 APK 진짜로 굽기
       run: |
         cd CleanWorkspace/android
