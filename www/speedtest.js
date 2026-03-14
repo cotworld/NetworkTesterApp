@@ -672,3 +672,44 @@ function createOrUpdateProgressBar(el, prg, spd) {
     if (!el.querySelector('.progress-container')) el.innerHTML = '<div class="progress-container"><div class="progress-bar"></div><div class="progress-text"></div></div>';
     el.querySelector('.progress-bar').style.width = `${prg * 100}%`; el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
 }
+
+// [추가] 안드로이드 네이티브 정보를 가져와서 화면의 select 박스를 자동으로 선택함
+async function autoSelectNetworkInfo() {
+    if (window.Capacitor && window.Capacitor.Plugins.NetworkInfo) {
+        try {
+            // 안드로이드 자바 코드에서 정보를 가져옴
+            const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
+            console.log("Native Info Received:", info);
+
+            // 1. 시험번호 (Test SIM / HPLMN 기반) 자동 선택
+            const testIdSelector = document.getElementById('testIdSelector');
+            if (testIdSelector && info.hplmnName) {
+                testIdSelector.value = info.hplmnName;
+            }
+
+            // 2. 네트워크 (RAT) 자동 선택
+            const ratSelector = document.getElementById('rat-select'); // HTML엔 ratSelector인데 id확인 필요
+            // 만약 ID가 ratSelector라면 아래줄 사용
+            const ratSel = document.getElementById('ratSelector');
+            if (ratSel && info.rat) {
+                ratSel.value = info.rat;
+            }
+
+            // 3. 통신사 (MNO) 자동 선택
+            // 현재 국가를 선택해야 MNO가 활성화되므로, 
+            // 우선 '지금 접속된 사업자 이름'을 텍스트로 먼저 보여줍니다.
+            const mnoSource = document.getElementById('mno-source');
+            if (mnoSource) {
+                mnoSource.innerText = ` (현재 접속: ${info.operatorName})`;
+            }
+
+        } catch (e) {
+            console.error("Native 연동 실패:", e);
+        }
+    }
+}
+
+// 페이지 로딩 완료 후 1.5초 뒤에 실행 (네이티브 준비 시간 고려)
+window.addEventListener('load', () => {
+    setTimeout(autoSelectNetworkInfo, 1500);
+});
