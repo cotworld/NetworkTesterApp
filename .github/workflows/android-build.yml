@@ -30,9 +30,8 @@ jobs:
           cd CleanWorkspace
           npm init -y
           
-          # 📍 중복된 설치 명령어 정리 및 백그라운드 플러그인 포함
-          npm install @capacitor/core@latest @capacitor/android@latest @capacitor/geolocation@latest
-          npm install @capacitor/app@latest @capacitor/background-task@latest
+          # 📍 오류가 나던 플러그인 이름 수정 및 중복 설치 명령어 제거!
+          npm install @capacitor/core@latest @capacitor/android@latest @capacitor/geolocation@latest @capacitor/app@latest @capawesome/capacitor-background-task@latest
           npm install -D @capacitor/cli@latest
           
           npx cap init "NetworkTester" "com.tester.app" --web-dir www
@@ -50,7 +49,6 @@ jobs:
           sed -i 's/<application/<application android:extractNativeLibs="true" android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
           sed -i 's|</manifest>|    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />\n</manifest>|g' android/app/src/main/AndroidManifest.xml
           
-          # MainActivity.java 생성
           cat << 'EOF' > android/app/src/main/java/com/tester/app/MainActivity.java
           package com.tester.app;
           import android.os.Bundle;
@@ -65,7 +63,6 @@ jobs:
           }
           EOF
           
-          # ShellExecutorPlugin.java 생성
           cat << 'EOF' > android/app/src/main/java/com/tester/app/ShellExecutorPlugin.java
           package com.tester.app;
           import java.io.*;
@@ -105,7 +102,6 @@ jobs:
           }
           EOF
           
-          # NetworkInfoPlugin.java 생성 (📍 권한 요청 팝업 로직 추가됨!)
           cat << 'EOF' > android/app/src/main/java/com/tester/app/NetworkInfoPlugin.java
           package com.tester.app;
           import android.Manifest;
@@ -127,7 +123,6 @@ jobs:
           public class NetworkInfoPlugin extends Plugin {
               @PluginMethod
               public void getDetail(PluginCall call) {
-                  // 권한이 없으면 사용자에게 팝업을 띄워 요청
                   if (getPermissionState("phone") != PermissionState.GRANTED) {
                       requestPermissionForAlias("phone", call, "permissionCallback");
                   } else {
