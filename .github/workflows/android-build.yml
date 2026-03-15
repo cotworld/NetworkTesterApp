@@ -34,18 +34,19 @@ jobs:
           npx cap init "NetworkTester" "com.tester.app" --web-dir www
           npx cap add android
           
-          # 📍 바뀐 IP(웹코드)를 안드로이드에 강제로 밀어넣기!
+          # 바뀐 IP(웹코드)를 안드로이드에 강제로 밀어넣기
           npx cap copy android
           
-          # 📍 내 저장소에 있는 바이너리 숨기기 (unzip 없이 직접 복사)
+          # 바이너리 숨기기
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
           if [ -f "../iperf3" ]; then cp ../iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so; elif [ -f "../bin/iperf3" ]; then cp ../bin/iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so; fi
           if [ -f "../traceroute" ]; then cp ../traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so; elif [ -f "../bin/traceroute" ]; then cp ../bin/traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so; fi
           
-          # 📍 압축 해제 명령 및 권한 부여
+          # 압축 해제 명령 및 권한 부여
           sed -i 's/<application/<application android:extractNativeLibs="true" android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
           sed -i 's|</manifest>|    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />\n</manifest>|g' android/app/src/main/AndroidManifest.xml
           
+          # 📍 여기서 제 실수를 바로잡았습니다! (registerPlugin이 무조건 먼저 와야 함)
           cat << 'EOF' > android/app/src/main/java/com/tester/app/MainActivity.java
           package com.tester.app;
           import android.os.Bundle;
@@ -53,9 +54,9 @@ jobs:
           public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
                   registerPlugin(ShellExecutorPlugin.class);
                   registerPlugin(NetworkInfoPlugin.class);
+                  super.onCreate(savedInstanceState);
               }
           }
           EOF
