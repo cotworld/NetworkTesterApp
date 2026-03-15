@@ -155,10 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshLocationBtn = document.getElementById('refreshLocationBtn');
     locationText = document.getElementById('location-text');
 
-    if (window.Worker) {
-        speedtestWorker = new Worker('speedtest-worker.js');
-    }
-
     getDeviceInfo(); 
     loadMnoDatabase(); 
     getLocation(); 
@@ -187,7 +183,8 @@ document.addEventListener('DOMContentLoaded', () => {
     exportHistoryButton.addEventListener('click', () => {
         const history = JSON.parse(localStorage.getItem('speedtestHistory')) || [];
         if (history.length === 0) return alert('내보낼 기록이 없습니다.');
-        const headers = ["time", "testId", "country", "mno", "rat", "testMode", "protocol", "ping_avg", "download", "upload", "packetLoss", "youtube", "instagram", "kakao", "naver", "whatsapp", "iperf3_log", "traceroute_log", "device", "location", "gps"];
+        // 앱 전용 헤더 (맨 뒤에 신규 데이터 배치)
+        const headers = ["time", "testId", "country", "mno", "rat", "testMode", "ping_avg", "download", "upload", "packetLoss", "youtube", "instagram", "kakao", "naver", "whatsapp", "manualLocation", "device", "location", "gps", "protocol", "iperf3_log", "traceroute_log"];
         let csvContent = headers.join(',') + '\n';
         history.forEach(row => {
             const values = headers.map(header => `"${('' + (row[header] || '')).replace(/"/g, '""')}"`);
@@ -210,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
         startButton.innerHTML = 'Stopping...';
         if (speedtestWorker) {
             speedtestWorker.terminate();
-            speedtestWorker = new Worker('speedtest-worker.js');
         }
     });
 
@@ -225,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedMode = document.querySelector('input[name="testMode"]:checked').value;
         const loopCount = parseInt(selectedMode.split('회')[0], 10);
         
-        // 프로토콜(UDP/TCP) 선택값 가져오기
         const protocolEl = document.querySelector('input[name="targetProtocol"]:checked');
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
 
@@ -239,7 +234,10 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 1; i <= loopCount; i++) {
             if (isTestCancelled) break;
             
-            // 1. Packet Loss 측정
+            // 📍 워커 완전 초기화 (연속 측정 시 다운로드 실패 방지)
+            if (speedtestWorker) speedtestWorker.terminate();
+            speedtestWorker = new Worker('speedtest-worker.js');
+
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Packet Loss`;
             [pingResult, downloadResult, uploadResult, youtubeLatency, instagramLatency, kakaotalkLatency, naverLatency, whatsappLatency].forEach(el => { if(el) el.innerHTML = ''; });
             if(lossDisplay) { lossDisplay.textContent = 'Ready'; lossDisplay.style.color = ''; }
@@ -248,14 +246,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isTestCancelled) break;
             await delay(200);
 
-            // 2. Download / Upload 측정
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Download/Upload`;
             const download = await measureSpeedWithWorker('download');
             if (isTestCancelled) break;
             const upload = await measureSpeedWithWorker('upload');
             if (isTestCancelled) break;
 
-            // 3. Latency 측정
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Latency`;
             const ping = await measureLatency();
             const services = [
@@ -270,25 +266,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const serviceResults = {};
             services.forEach((s, idx) => serviceResults[s.name] = allResults[idx]);
 
-            // 4. 네이티브 도구(iperf3, traceroute) 자동 측정
             const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
             const port = document.getElementById('iperfPort') ? document.getElementById('iperfPort').value : "5201";
 
-            // 프로토콜에 따른 파라미터 분기
             const iperfArgs = selectedProtocol === 'UDP' ? `-c ${host} -p ${port} -u -b 0 -t 5` : `-c ${host} -p ${port} -t 5`;
             const traceArgs = selectedProtocol === 'TCP' ? `-T ${host}` : `${host}`;
 
-            // iperf3
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - iperf3 [${selectedProtocol}]`;
-            const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${selectedProtocol})`);
+            const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${selectedProtocol})`, 15000); // 15초 타임아웃
             if (isTestCancelled) break;
 
-            // traceroute
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - traceroute [${selectedProtocol}]`;
-            const traceResultLog = await measureNativeTool('traceroute', traceArgs, `자동 traceroute (${selectedProtocol})`);
+            const traceResultLog = await measureNativeTool('traceroute', traceArgs, `자동 traceroute (${selectedProtocol})`, 40000); // 40초 타임아웃
             if (isTestCancelled) break;
 
-            // 결과 저장 (프로토콜 포함)
+            // 📍 기존 웹 프레임과 순서 100% 동일하게 배치 (새 항목은 맨 밑으로)
             const resultData = {
                 time: new Date().toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }),
                 testId: testIdSelector.value,
@@ -296,7 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 mno: mnoSelector.value,
                 rat: ratSelector.value,
                 testMode: selectedMode,
-                protocol: selectedProtocol,
                 ping_avg: ping.avg,
                 download: download,
                 upload: upload,
@@ -306,12 +297,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 kakao: serviceResults.Kakao,
                 naver: serviceResults.Naver,
                 whatsapp: serviceResults.WhatsApp,
-                iperf3_log: iperfResultLog,
-                traceroute_log: traceResultLog,
                 manualLocation: manualLocationValue,
                 device: currentDeviceInfo,
                 location: currentAddress,
-                gps: currentGpsCoords
+                gps: currentGpsCoords,
+                // --- 신규 추가 항목 (엑셀 맨 우측 열에 할당) ---
+                protocol: selectedProtocol,
+                iperf3_log: iperfResultLog,
+                traceroute_log: traceResultLog
             };
 
             saveHistory(resultData);
@@ -331,7 +324,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// [복구됨] 핑 지연시간 측정 로직
 async function measureLatency() {
     const pingTimes = [];
     for (let i = 0; i < 3; i++) {
@@ -347,31 +339,43 @@ async function measureLatency() {
     return { avg };
 }
 
-// [복구됨] 다운로드/업로드 측정 로직
 function createOrUpdateProgressBar(el, prg, spd) {
     if (!el.querySelector('.progress-container')) el.innerHTML = '<div class="progress-container"><div class="progress-bar"></div><div class="progress-text"></div></div>';
     el.querySelector('.progress-bar').style.width = `${prg * 100}%`; el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
 }
 
+// 📍 속도 측정 타임아웃 추가 (25초 초과 시 다음으로 넘어감)
 async function measureSpeedWithWorker(type) {
     const element = (type === 'download') ? downloadResult : uploadResult;
     const baseText = element.dataset ? element.dataset.baseText || (type === 'download' ? 'Download Speed' : 'Upload Speed') : (type === 'download' ? 'Download' : 'Upload');
     createOrUpdateProgressBar(element, 0, '0.00');
+    
     return new Promise((resolve) => {
         if(!speedtestWorker) { resolve('Error'); return; }
+        
+        // 25초 타임아웃 안전장치
+        const fallbackTimer = setTimeout(() => {
+            element.innerHTML = `⚠️ ${baseText}: Timeout`;
+            speedtestWorker.terminate(); // 무한 루프 도는 워커 강제 종료
+            resolve('Timeout');
+        }, 25000);
+
         const handler = (event) => {
             if (isTestCancelled) {
+                clearTimeout(fallbackTimer);
                 speedtestWorker.removeEventListener('message', handler);
                 resolve('Cancelled'); return;
             }
             const { type: msgType, progress, speed, finalSpeed } = event.data;
             if (msgType === 'progress') createOrUpdateProgressBar(element, progress, speed);
             if (msgType === 'complete') {
+                clearTimeout(fallbackTimer);
                 element.innerHTML = `✅ ${baseText}: <span class="speed-result-value">${finalSpeed} Mbps</span>`;
                 speedtestWorker.removeEventListener('message', handler);
                 resolve(finalSpeed);
             }
             if (msgType === 'error') {
+                clearTimeout(fallbackTimer);
                 element.innerHTML = `❌ ${baseText}: Failed`;
                 speedtestWorker.removeEventListener('message', handler);
                 resolve('Failed');
@@ -383,7 +387,6 @@ async function measureSpeedWithWorker(type) {
     });
 }
 
-// [복구됨] 서비스 지연시간 측정 로직
 async function measureServiceLatency(url, element, name) {
     if (!element) return 'N/A';
     const times = [];
@@ -400,7 +403,6 @@ async function measureServiceLatency(url, element, name) {
     return avg;
 }
 
-// [복구됨] 패킷로스 딥다이브 로직
 async function measurePacketLossDeepDive() {
     if (lossDisplay) lossDisplay.innerHTML = "<span style='color:orange'>Warmup & Analysis...</span>";
     const socketUrl = WS_URL;
@@ -494,23 +496,28 @@ async function measurePacketLossDeepDive() {
     });
 }
 
-// 네이티브 플러그인 연동 및 UI 업데이트
-async function measureNativeTool(cmd, args, label) {
+// 📍 네이티브 명령 타임아웃 래퍼 적용
+async function measureNativeTool(cmd, args, label, timeoutMs) {
     const outputEl = document.getElementById('shell-result');
     if (!outputEl) return "UI Element Not Found";
 
     outputEl.style.color = '#ffca28';
-    outputEl.textContent = `⏳ [${label}] 진행 중...\n명령어: ${cmd} ${args}\n서버 응답을 기다리는 중입니다...`;
+    outputEl.textContent = `⏳ [${label}] 진행 중...\n명령어: ${cmd} ${args}\n서버 응답 대기 중 (최대 ${timeoutMs/1000}초)...`;
 
     if (window.Capacitor && window.Capacitor.Plugins.ShellExecutor) {
         try {
-            const { result } = await window.Capacitor.Plugins.ShellExecutor.runCommand({ command: cmd, args: args });
+            // 실행과 타임아웃을 경주(Race) 시킵니다.
+            const execPromise = window.Capacitor.Plugins.ShellExecutor.runCommand({ command: cmd, args: args });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout (응답 지연)")), timeoutMs));
+            
+            const { result } = await Promise.race([execPromise, timeoutPromise]);
+            
             outputEl.style.color = '#00ff00';
             outputEl.textContent = `✅ [${label} 완료]\n${result}`;
             return result; 
         } catch (e) {
             outputEl.style.color = '#ff5252';
-            const errorMsg = `❌ [${label} 실행 오류]: ` + e;
+            const errorMsg = `❌ [${label} 오류/타임아웃]: ` + e.message;
             outputEl.textContent = errorMsg;
             return errorMsg;
         }
@@ -571,9 +578,8 @@ function loadHistory() {
     const h = JSON.parse(localStorage.getItem('speedtestHistory')) || []; historyTableBody.innerHTML = h.length ? '' : '<tr><td colspan="20">No History</td></tr>';
     h.forEach(r => {
         const row = document.createElement('tr');
-        const iperfStatus = r.iperf3_log && !r.iperf3_log.includes("Error") ? "✅" : "❌";
-        const traceStatus = r.traceroute_log && !r.traceroute_log.includes("Error") ? "✅" : "❌";
-        // protocol 값이 없으면 (이전 데이터) 공백 처리
+        const iperfStatus = r.iperf3_log && !r.iperf3_log.includes("Error") && !r.iperf3_log.includes("Timeout") ? "✅" : "❌";
+        const traceStatus = r.traceroute_log && !r.traceroute_log.includes("Error") && !r.traceroute_log.includes("Timeout") ? "✅" : "❌";
         const protocolDisplay = r.protocol ? r.protocol : '';
 
         row.innerHTML = `<td>${r.time}</td><td>${r.testId || 'N/A'}</td><td>${r.country}</td><td>${r.mno}</td><td>${r.rat}</td><td>${r.testMode}</td><td><b>${protocolDisplay}</b></td><td>${r.ping_avg}</td><td>${r.download}</td><td>${r.upload}</td><td>${r.packetLoss || '-'}</td><td>${r.youtube || ''}</td><td>${r.instagram || ''}</td><td>${r.kakao || ''}</td><td>${r.naver || ''}</td><td>${r.whatsapp || ''}</td><td>${iperfStatus}</td><td>${traceStatus}</td><td>${r.device}</td><td>${r.location}</td><td>${r.gps || ''}</td>`;
