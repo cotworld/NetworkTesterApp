@@ -37,7 +37,7 @@ jobs:
           # 📍 바뀐 IP(웹코드)를 안드로이드에 강제로 밀어넣기!
           npx cap copy android
           
-          # 📍 바이너리 숨기기 (보안 정책 우회)
+          # 📍 내 저장소에 있는 바이너리 숨기기 (unzip 없이 직접 복사)
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
           if [ -f "../iperf3" ]; then cp ../iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so; elif [ -f "../bin/iperf3" ]; then cp ../bin/iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so; fi
           if [ -f "../traceroute" ]; then cp ../traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so; elif [ -f "../bin/traceroute" ]; then cp ../bin/traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so; fi
