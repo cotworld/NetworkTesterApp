@@ -24,16 +24,132 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: 4. 앱 조립 및 시스템 라이브러리 압축 해제 설정
+    - name: 4. 앱 조립 및 시스템 최적화 세팅
       run: |
+        # 📍 1. 최신 웹 파일(HTML/JS) 확실하게 복사
         mkdir -p CleanWorkspace/www
         cp index.html speedtest.js style.css speedtest-worker.js CleanWorkspace/www/ 2>/dev/null || true
         cp -r www/* CleanWorkspace/www/ 2>/dev/null || true
+        
         cd CleanWorkspace
         npm init -y
         npm install @capacitor/core@latest @capacitor/android@latest @capacitor/geolocation@latest
         npm install -D @capacitor/cli@latest
         npx cap init "Network Tester" "com.tester.app" --web-dir www
+        npx cap add android
+        
+        # 📍 [핵심] 변경된 IP 주소(웹 파일)를 안드로이드 앱 엔진에 강제로 동기화!
+        npx cap copy android
+
+        # 📍 2. 바이너리 복사
+        mkdir -p android/app/src/main/jniLibs/arm64-v8a
+        if [ -f "../iperf3" ]; then cp ../iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so; elif [ -f "../bin/iperf3" ]; then cp ../bin/iperf3 android/app/src/main/jniLibs/arm64-v8a/libiperf3.so; fi
+        if [ -f "../traceroute" ]; then cp ../traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so; elif [ -f "../bin/traceroute" ]; then cp ../bin/traceroute android/app/src/main/jniLibs/arm64-v8a/libtraceroute.so; fi
+        
+        # 📍 3. 압축 해제 및 권한
+        sed -i 's/<application/<application android:extractNativeLibs="true" android:usesCleartextTraffic="true"/g' android/app/src/main/AndroidManifest.xml
+        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.READ_PHONE_STATE" />\n    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+
+        # 📍 4. MainActivity.java (super.onCreate 순서 교정!)
+        cat <<EOF > android/app/src/main/java/com/tester/app/MainActivity.java
+        package com.tester.app;
+        import android.os.Bundle;
+        import com.getcapacitor.BridgeActivity;
+
+        public class MainActivity extends BridgeActivity {
+            @Override
+            public void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState); // 📍 반드시 뼈대부터 먼저 로드!
+                registerPlugin(ShellExecutorPlugin.class);
+                registerPlugin(NetworkInfoPlugin.class);
+            }
+        }
+        EOF
+
+        # 📍 5. ShellExecutorPlugin.java
+        cat <<EOF > android/app/src/main/java/com/tester/app/ShellExecutorPlugin.java
+        package com.tester.app;
+        import java.io.*;
+        import com.getcapacitor.JSObject;
+        import com.getcapacitor.annotation.CapacitorPlugin;
+        import com.getcapacitor.Plugin;
+        import com.getcapacitor.PluginCall;
+        import com.getcapacitor.PluginMethod;
+
+        @CapacitorPlugin(name = "ShellExecutor")
+        public class ShellExecutorPlugin extends Plugin {
+            @PluginMethod
+            public void runCommand(PluginCall call) {
+                String command = call.getString("command");
+                String args = call.getString("args");
+                StringBuilder output = new StringBuilder();
+                try {
+                    String nativeLibDir = getContext().getApplicationInfo().nativeLibraryDir;
+                    String binPath = nativeLibDir + "/lib" + command + ".so";
+                    File binFile = new File(binPath);
+                    if (!binFile.exists()) {
+                        call.reject("File missing at: " + binPath);
+                        return;
+                    }
+                    binFile.setExecutable(true);
+                    Process process = Runtime.getRuntime().exec(binPath + " " + args);
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                    BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+                    String line;
+                    while ((line = reader.readLine()) != null) output.append(line).append("\n");
+                    while ((line = errReader.readLine()) != null) output.append(line).append("\n");
+                    process.waitFor();
+                    JSObject ret = new JSObject();
+                    ret.put("result", output.toString());
+                    call.resolve(ret);
+                } catch (Exception e) { call.reject(e.getMessage()); }
+            }
+        }
+        EOF
+
+        # 📍 6. NetworkInfoPlugin.java
+        cat <<EOF > android/app/src/main/java/com/tester/app/NetworkInfoPlugin.java
+        package com.tester.app;
+        import android.telephony.TelephonyManager;
+        import android.content.Context;
+        import com.getcapacitor.JSObject;
+        import com.getcapacitor.annotation.CapacitorPlugin;
+        import com.getcapacitor.Plugin;
+        import com.getcapacitor.PluginCall;
+        import com.getcapacitor.PluginMethod;
+
+        @CapacitorPlugin(name = "NetworkInfo")
+        public class NetworkInfoPlugin extends Plugin {
+            @PluginMethod
+            public void getDetail(PluginCall call) {
+                TelephonyManager tm = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
+                JSObject ret = new JSObject();
+                try {
+                    String hplmn = tm.getSimOperator();
+                    String hplmnName = "현지심";
+                    if ("45006".equals(hplmn)) hplmnName = "LG U+";
+                    else if (hplmn != null && hplmn.startsWith("45005")) hplmnName = "SKT";
+                    else if (hplmn != null && hplmn.startsWith("45008")) hplmnName = "KT";
+                    ret.put("hplmnName", hplmnName);
+                    ret.put("operatorName", tm.getNetworkOperatorName());
+                    ret.put("rat", (tm.getDataNetworkType() == 20) ? "5G" : "LTE");
+                    call.resolve(ret);
+                } catch (Exception e) { call.reject(e.getMessage()); }
+            }
+        }
+        EOF
+
+    - name: 5. 안드로이드 APK 굽기
+      run: |
+        cd CleanWorkspace/android
+        chmod +x gradlew
+        ./gradlew assembleDebug --no-daemon
+
+    - name: 6. 다운로드 링크 생성
+      uses: actions/upload-artifact@v4
+      with:
+        name: NetworkTester-App
+        path: CleanWorkspace/android/app/build/outputs/apk/debug/app-debug.apk
         npx cap add android
 
         # 📍 바이너리 복사 (루트에 있든 bin 폴더에 있든 확실히 찾아서 복사합니다)
