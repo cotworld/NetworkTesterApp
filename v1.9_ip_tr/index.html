@@ -78,21 +78,7 @@
             <button id="startButton" disabled>국가, 사업자, 네트워크를 선택하세요 (Select Country, MNO, RAT)</button>
             <button id="cancelButton" style="display: none;">측정 취소 (Cancel Test)</button>
         </div>
-        <hr>
-        <div class="selection-group" style="background: var(--bg-secondary); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
-            <h4 style="margin-top: 0;">⚙️ Advanced Diagnostics (App Only)</h4>
-            
-            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                <label><input type="checkbox" id="toggleIperf" checked> iperf3 동시 측정</label>
-                <label><input type="checkbox" id="toggleTrace" checked> Traceroute 동시 측정</label>
-            </div>
-            
-            <div class="selection-item">
-                <label for="diagTarget">Target Server (IP/Domain):</label>
-                <input type="text" id="diagTarget" value="180.228.85.25" placeholder="180.228.85.25">
-            </div>
-        </div>
-
+        
         <div id="results">
             <h2>📊 Real-time Results</h2>
             <div id="ping-result" class="result-item"></div>
