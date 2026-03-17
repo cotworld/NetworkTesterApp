@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else iperfArgs = `-c ${host} -p ${port} -t 10`;
         }
         
-        await measureNativeTool('iperf3', iperfArgs, `수동 iperf3 (${combinedProtocolStr})`, 15000);
+        await measureNativeTool('iperf3', iperfArgs, `수동 iperf3 (${combinedProtocolStr})`, 30000);
     });
 
     const traceBtn = document.getElementById('traceButton');
@@ -353,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const traceArgs = selectedProtocol === 'TCP' ? `-T ${host}` : `${host}`;
 
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - iperf3 [${combinedProtocolStr}]`;
-            const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${combinedProtocolStr})`, 15000); 
+            const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${combinedProtocolStr})`, 30000); 
             if (isTestCancelled) break;
 
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - traceroute [${selectedProtocol}]`;
