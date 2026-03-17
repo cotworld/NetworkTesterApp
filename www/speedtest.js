@@ -519,34 +519,72 @@ async function measureSpeedWithWorker(type) {
     });
 }
 
+// iperf3 결과를 Opensignal 판단 기준으로 재계산하는 로직이 포함된 함수
 async function measureNativeTool(cmd, args, label, timeoutMs) {
     const outputEl = document.getElementById('shell-result');
     if (!outputEl) return "UI Element Not Found";
 
     outputEl.style.color = '#ffca28';
-    outputEl.textContent = `⏳ [${label}] 진행 중...\n> ${cmd} ${args}\n서버 응답 대기 중 (최대 ${timeoutMs/1000}초)...`;
+    outputEl.textContent = `⏳ [${label}] 진행 중...\n> ${cmd} ${args}\n서버 응답 대기 중...`;
 
     if (window.Capacitor && window.Capacitor.Plugins.ShellExecutor) {
         try {
             const execPromise = window.Capacitor.Plugins.ShellExecutor.runCommand({ command: cmd, args: args });
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout (응답 지연)")), timeoutMs));
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeoutMs));
             
             const { result } = await Promise.race([execPromise, timeoutPromise]);
             
+            let finalResult = result;
+
+            // 📍 iperf3 결과일 경우 Opensignal 기준으로 재계산 수행
+            if (cmd === 'iperf3' && result.includes('Lost/Total Datagrams')) {
+                try {
+                    // 로그에서 SUM 라인을 찾아 데이터 추출
+                    // 예시: [SUM] 0.00-10.00 sec 12.0 MBytes 10.1 Mbits/sec 4.354 ms 185797/194946 (81%) receiver
+                    const lines = result.split('\n');
+                    const sumLine = lines.find(l => l.includes('[SUM]') && l.includes('receiver'));
+                    
+                    if (sumLine) {
+                        const parts = sumLine.trim().split(/\s+/);
+                        // iperf3 출력 형식에 따라 인덱스가 다를 수 있으나 보통 뒤에서 4번째가 "Lost/Total"
+                        const lossPart = parts.find(p => p.includes('/')); 
+                        const outOfOrderMatch = result.match(/(\d+)\s+datagrams\s+received\s+out-of-order/);
+                        
+                        if (lossPart) {
+                            const [lost, total] = lossPart.split('/').map(Number);
+                            const outOfOrder = outOfOrderMatch ? parseInt(outOfOrderMatch[1], 10) : 0;
+                            
+                            // 📍 Opensignal 판단 로직: (순수 유실 + 순서 바뀜) / 전체
+                            const discarded = lost + outOfOrder;
+                            const opensignalLossRate = total > 0 ? ((discarded / total) * 100).toFixed(2) : 0;
+                            
+                            const osSummary = `\n\n--------------------------------------\n` +
+                                            `iperf3 (opensignal 판단기준 적용) : \n` +
+                                            `- 전체 패킷: ${total.toLocaleString()}\n` +
+                                            `- 순수 유실(Lost): ${lost.toLocaleString()}\n` +
+                                            `- 순서 뒤바뀜(Out-of-order): ${outOfOrder.toLocaleString()}\n` +
+                                            `- 최종 손실(Discarded): ${discarded.toLocaleString()}\n` +
+                                            `- 📢 재계산 유실률: ${opensignalLossRate}%\n` +
+                                            `--------------------------------------`;
+                            finalResult += osSummary;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Opensignal 파싱 에러:", e);
+                }
+            }
+
             outputEl.style.color = '#00ff00';
-            outputEl.textContent = `✅ [${label} 완료]\n${result}`;
-            return result; 
+            outputEl.textContent = `✅ [${label} 완료]\n${finalResult}`;
+            return finalResult; 
         } catch (e) {
             outputEl.style.color = '#ff5252';
-            const errorMsg = `❌ [${label} 오류/타임아웃]: ` + e.message;
+            const errorMsg = `❌ [${label} 오류]: ` + e.message;
             outputEl.textContent = errorMsg;
             return errorMsg;
         }
     } else {
-        const warnMsg = "⚠️ 앱에서만 지원합니다.";
-        outputEl.style.color = '#ff5252';
-        outputEl.textContent = warnMsg;
-        return warnMsg;
+        return "⚠️ 앱에서만 지원합니다.";
     }
 }
 
