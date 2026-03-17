@@ -122,6 +122,7 @@ let startButton, cancelButton, locationInfo, deviceInfo, countrySelector, mnoSel
     historyTableBody, locationInput, refreshLocationBtn, locationText, statusBanner;
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 테마 설정
     const themeToggle = document.getElementById('theme-toggle');
     if (themeToggle) {
         if (localStorage.getItem('theme') === 'dark') {
@@ -136,17 +137,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // DOM 요소 매핑
     startButton = document.getElementById('startButton');
     cancelButton = document.getElementById('cancelButton');
     statusBanner = document.getElementById('status-banner');
     
-    locationInfo = document.getElementById('location-info');
-    deviceInfo = document.getElementById('device-info');
     countrySelector = document.getElementById('countrySelector');
     mnoSelector = document.getElementById('mnoSelector');
     ratSelector = document.getElementById('ratSelector');
     testIdSelector = document.getElementById('testIdSelector');
     mnoSource = document.getElementById('mno-source');
+    locationInput = document.getElementById('locationInput');
     
     pingResult = document.getElementById('ping-result');
     downloadResult = document.getElementById('download-result');
@@ -164,9 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
     clearHistoryButton = document.getElementById('clearHistoryButton');
     exportHistoryButton = document.getElementById('exportHistoryButton');
     historyTableBody = document.querySelector('#historyTable tbody');
-    locationInput = document.getElementById('locationInput');
     refreshLocationBtn = document.getElementById('refreshLocationBtn');
     locationText = document.getElementById('location-text');
+    deviceInfo = document.getElementById('device-info');
 
     getDeviceInfo(); 
     loadMnoDatabase(); 
@@ -180,36 +181,53 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshLocationBtn.addEventListener('click', getLocation);
     if(locationInput) locationInput.addEventListener('input', (e) => manualLocationValue = e.target.value);
 
+    // 📍 고급 설정 토글 로직
+    const profileEl = document.getElementById('iperfProfile');
+    const advancedSettings = document.getElementById('advanced-native-settings');
+    const advancedToggle = document.getElementById('advanced-native-toggle');
+
+    if (advancedToggle) {
+        advancedToggle.addEventListener('click', () => {
+            const isHidden = advancedSettings.style.display === 'none';
+            advancedSettings.style.display = isHidden ? 'block' : 'none';
+            advancedToggle.textContent = isHidden ? '▲ 상세 설정 접기' : '▼ 상세 설정 펼치기';
+        });
+    }
+
+    if (profileEl) {
+        profileEl.addEventListener('change', (e) => {
+            if (e.target.value !== 'normal') {
+                advancedSettings.style.display = 'block';
+                if(advancedToggle) advancedToggle.textContent = '▲ 상세 설정 접기';
+            }
+        });
+    }
+
+    // 수동 버튼
     const iperfBtn = document.getElementById('iperfButton');
     if(iperfBtn) iperfBtn.addEventListener('click', async () => {
         const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
         const port = document.getElementById('iperfPort') ? document.getElementById('iperfPort').value : "5201";
-        
         const protocolEl = document.querySelector('input[name="targetProtocol"]:checked');
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
-        
-        const profileEl = document.getElementById('iperfProfile');
         const stressProfile = profileEl ? profileEl.value : 'normal';
 
-        let profileLabelStr = "일반";
-        if (stressProfile === 'stress_bw') profileLabelStr = "극한";
-        else if (stressProfile === 'stress_mtu') profileLabelStr = "MTU부하";
-        else if (stressProfile === 'stress_pps') profileLabelStr = "Opensignal모사";
+        let profileLabelStr = stressProfile === 'stress_bw' ? "극한" : (stressProfile === 'stress_mtu' ? "MTU부하" : (stressProfile === 'stress_pps' ? "Opensignal모사" : "일반"));
         const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
 
+        // 📍 타임아웃 방지를 위해 -R (다운로드 방향) 제거하고 업로드로 통일
         let iperfArgs = "";
         if (selectedProtocol === 'UDP') {
-            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`;
-            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`;
-            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`;
+            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
+            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
+            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10`; 
             else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
         } else {
-            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
-            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10 -R`;
-            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10 -R`;
+            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
+            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
+            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10`;
             else iperfArgs = `-c ${host} -p ${port} -t 10`;
         }
-        
         await measureNativeTool('iperf3', iperfArgs, `수동 iperf3 (${combinedProtocolStr})`, 30000);
     });
 
@@ -222,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await measureNativeTool('traceroute', traceArgs, `수동 traceroute (${selectedProtocol})`, 40000);
     });
 
+    // 히스토리 버튼들
     showHistoryButton.addEventListener('click', () => {
         const isHidden = historyContainer.style.display === 'none';
         historyContainer.style.display = isHidden ? 'block' : 'none';
@@ -256,53 +275,40 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelButton.addEventListener('click', () => {
         isTestCancelled = true;
         cancelButton.disabled = true;
-        cancelButton.textContent = 'Cancelling...';
-        
         if (statusBanner) {
             statusBanner.style.backgroundColor = '#F44336';
-            statusBanner.textContent = '🛑 측정이 취소되었습니다.';
+            statusBanner.innerHTML = '🛑 측정이 취소되었습니다.';
             setTimeout(() => statusBanner.style.display = 'none', 3000);
         }
-        
-        startButton.innerHTML = 'Stopping...';
         if (speedtestWorker) speedtestWorker.terminate();
     });
 
-    // 📍 2. 자동 연속 측정 메인 루프 (UI 배너 업데이트 연동)
+    // 📍 2. 자동 연속 측정 메인 루프
     startButton.addEventListener('click', async () => {
         isTestCancelled = false;
-        startButton.disabled = true;
-        startButton.style.display = 'none'; // 시작 버튼은 숨기고
-        
-        cancelButton.style.display = 'block'; // 취소 버튼을 활성화
+        startButton.style.display = 'none'; 
+        cancelButton.style.display = 'block'; 
         cancelButton.disabled = false;
-        cancelButton.textContent = '🛑 측정 강제 취소 (Cancel Test)';
 
         const selectedMode = document.querySelector('input[name="testMode"]:checked').value;
         const loopCount = parseInt(selectedMode.split('회')[0], 10);
         
         const protocolEl = document.querySelector('input[name="targetProtocol"]:checked');
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
-        const profileEl = document.getElementById('iperfProfile');
         const stressProfile = profileEl ? profileEl.value : 'normal';
 
-        let profileLabelStr = "일반";
-        if (stressProfile === 'stress_bw') profileLabelStr = "극한";
-        else if (stressProfile === 'stress_mtu') profileLabelStr = "MTU부하";
-        else if (stressProfile === 'stress_pps') profileLabelStr = "Opensignal모사";
-        
+        let profileLabelStr = stressProfile === 'stress_bw' ? "극한" : (stressProfile === 'stress_mtu' ? "MTU부하" : (stressProfile === 'stress_pps' ? "Opensignal모사" : "일반"));
         const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
         const delay = ms => new Promise(res => setTimeout(res, ms));
 
-        // 📍 진행 상태 배너 활성화
         if (statusBanner) {
             statusBanner.style.display = 'block';
             statusBanner.style.backgroundColor = '#ff9800';
         }
 
-        // 공통 UI 업데이트 헬퍼
         const updateStatus = (currentLoop, totalLoop, stepName) => {
             if (statusBanner) statusBanner.innerHTML = `⏳ [${currentLoop}/${totalLoop}회차] <br> ${stepName} 측정 중...`;
+            document.getElementById('shell-result').scrollIntoView({ behavior: 'smooth', block: 'end' });
         };
 
         for (let i = 1; i <= loopCount; i++) {
@@ -312,21 +318,21 @@ document.addEventListener('DOMContentLoaded', () => {
             speedtestWorker = new Worker('speedtest-worker.js');
 
             [pingResult, downloadResult, uploadResult, youtubeLatency, instagramLatency, kakaotalkLatency, naverLatency, whatsappLatency].forEach(el => { if(el) el.innerHTML = ''; });
-            if(lossDisplay) { lossDisplay.textContent = 'Ready'; lossDisplay.style.color = ''; }
+            if(lossDisplay) { lossDisplay.textContent = 'Ready'; lossDisplay.style.color = '#aaa'; }
 
-            updateStatus(i, loopCount, "Server Ping");
+            updateStatus(i, loopCount, "서버 지연시간 (Ping)");
             const ping = await measureLatency();
             if (isTestCancelled) break;
 
-            updateStatus(i, loopCount, "Download Speed");
+            updateStatus(i, loopCount, "다운로드 속도 (DL)");
             const download = await measureSpeedWithWorker('download');
             if (isTestCancelled) break;
 
-            updateStatus(i, loopCount, "Upload Speed");
+            updateStatus(i, loopCount, "업로드 속도 (UL)");
             const upload = await measureSpeedWithWorker('upload');
             if (isTestCancelled) break;
 
-            updateStatus(i, loopCount, "Service Latency (SNS)");
+            updateStatus(i, loopCount, "SNS 지연시간 측정");
             const services = [
                 { name: 'YouTube', url: 'https://www.youtube.com', element: youtubeLatency },
                 { name: 'Instagram', url: 'https://www.instagram.com', element: instagramLatency },
@@ -340,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
             services.forEach((s, idx) => serviceResults[s.name] = allResults[idx]);
             if (isTestCancelled) break;
 
-            updateStatus(i, loopCount, "Packet Loss (S/M/L)");
+            updateStatus(i, loopCount, "패킷 유실률 (Loss)");
             const packetLossData = await measurePacketLossDeepDive();
             if (isTestCancelled) break;
             await delay(200);
@@ -348,26 +354,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
             const port = document.getElementById('iperfPort') ? document.getElementById('iperfPort').value : "5201";
 
+            // 📍 -R 제거됨 (타임아웃 방지, 업로드 부하 테스트)
             let iperfArgs = "";
             if (selectedProtocol === 'UDP') {
-                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`;
-                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`;
-                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`;
+                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
+                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
+                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10`; 
                 else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
             } else {
-                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
-                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10 -R`;
-                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10 -R`;
+                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
+                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
+                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10`;
                 else iperfArgs = `-c ${host} -p ${port} -t 10`;
             }
-
             const traceArgs = selectedProtocol === 'TCP' ? `-T ${host}` : `${host}`;
 
-            updateStatus(i, loopCount, `iperf3 [${combinedProtocolStr}]`);
+            updateStatus(i, loopCount, `네이티브 iperf3 [${combinedProtocolStr}]`);
             const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${combinedProtocolStr})`, 30000); 
             if (isTestCancelled) break;
 
-            updateStatus(i, loopCount, `traceroute [${selectedProtocol}]`);
+            updateStatus(i, loopCount, `네이티브 traceroute [${selectedProtocol}]`);
             const traceResultLog = await measureNativeTool('traceroute', traceArgs, `자동 traceroute (${selectedProtocol})`, 40000); 
             if (isTestCancelled) break;
 
@@ -401,28 +407,27 @@ document.addEventListener('DOMContentLoaded', () => {
             loadHistory();
 
             if (i < loopCount && !isTestCancelled) {
-                updateStatus(i, loopCount, "다음 회차 대기 중...");
+                updateStatus(i, loopCount, "결과 저장 완료. 다음 회차 대기 중...");
                 await delay(2000);
             }
         }
         
-        // 측정 종료 후 원상복구
         if (!isTestCancelled && statusBanner) {
             statusBanner.style.backgroundColor = '#4CAF50';
-            statusBanner.innerHTML = '✅ 모든 측정이 완료되었습니다!';
+            statusBanner.innerHTML = '✅ 측정이 모두 완료되었습니다!';
             setTimeout(() => statusBanner.style.display = 'none', 4000);
         }
         
         startButton.style.display = 'block';
-        startButton.innerHTML = 'Start Test';
         cancelButton.style.display = 'none';
         checkSelections();
     });
 });
 
+// 📍 형광색 ms 포맷팅 적용 함수들
 async function measureLatency() {
     const pingTimes = [];
-    pingResult.innerHTML = `⏳ Server Ping: <span class="speed-result-value">Measuring...</span>`;
+    pingResult.innerHTML = `✅ Ping: 측정중...`;
     for (let i = 0; i < 3; i++) {
         try {
             const start = Date.now();
@@ -430,32 +435,55 @@ async function measureLatency() {
             pingTimes.push(Date.now() - start);
             await new Promise(r => setTimeout(r, 250));
         } catch (e) { 
-            pingResult.innerHTML = `❌ Server Ping: <span class="speed-result-value">Failed</span>`;
+            pingResult.innerHTML = `❌ Ping: Failed`;
             return { avg: 'N/A' }; 
         }
     }
     const avg = Math.round(pingTimes.slice(1).reduce((a, b) => a + b, 0) / (pingTimes.length - 1));
-    pingResult.innerHTML = `✅ Server Ping: <span class="speed-result-value">${avg} ms</span>`;
+    pingResult.innerHTML = `✅ Ping: <span class="highlight-ms">${avg} ms</span>`;
     return { avg };
 }
 
+async function measureServiceLatency(url, element, name) {
+    if (!element) return 'N/A';
+    element.innerHTML = `✅ ${name}: 측정중...`;
+    const times = [];
+    for (let i = 0; i < 3; i++) {
+        try {
+            const start = Date.now();
+            await fetch(`${url}?r=${Date.now()}`, { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(3000) });
+            times.push(Date.now() - start);
+            await new Promise(r => setTimeout(r, 500));
+        } catch (e) { 
+            element.innerHTML = `❌ ${name}: Failed`;
+            return 'Failed'; 
+        }
+    }
+    const avg = Math.round(times.slice(1).reduce((a, b) => a + b, 0) / (times.length - 1));
+    element.innerHTML = `✅ ${name}: <span class="highlight-ms">${avg} ms</span>`;
+    return avg;
+}
+
+// 📍 큰 폰트 다운로드/업로드 적용
 function createOrUpdateProgressBar(el, prg, spd) {
-    if (!el.querySelector('.progress-container')) el.innerHTML = '<div class="progress-container"><div class="progress-bar"></div><div class="progress-text"></div></div>';
-    el.querySelector('.progress-bar').style.width = `${prg * 100}%`; el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
+    if (!el.querySelector('.progress-container')) el.innerHTML = '<div class="progress-container" style="margin-top:5px; background:#444; border-radius:4px; overflow:hidden;"><div class="progress-bar" style="height:8px; background:#2196F3; width:0%;"></div></div><div class="progress-text" style="font-size:0.85em; margin-top:3px;"></div>';
+    el.querySelector('.progress-bar').style.width = `${prg * 100}%`; 
+    el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
 }
 
 async function measureSpeedWithWorker(type) {
     const element = (type === 'download') ? downloadResult : uploadResult;
-    const baseText = element.dataset ? element.dataset.baseText || (type === 'download' ? 'Download Speed' : 'Upload Speed') : (type === 'download' ? 'Download' : 'Upload');
+    const baseText = element.dataset ? element.dataset.baseText : (type === 'download' ? 'Download' : 'Upload');
+    const colorClass = type === 'download' ? '' : 'speed-large-value-up';
+    
+    element.innerHTML = `<span style="font-size:0.9em; color:#aaa;">${baseText}</span>`;
     createOrUpdateProgressBar(element, 0, '0.00');
     
     return new Promise((resolve) => {
         if(!speedtestWorker) { resolve('Error'); return; }
-        
         const fallbackTimer = setTimeout(() => {
             element.innerHTML = `⚠️ ${baseText}: Timeout`;
-            speedtestWorker.terminate(); 
-            resolve('Timeout');
+            speedtestWorker.terminate(); resolve('Timeout');
         }, 25000);
 
         const handler = (event) => {
@@ -468,7 +496,7 @@ async function measureSpeedWithWorker(type) {
             if (msgType === 'progress') createOrUpdateProgressBar(element, progress, speed);
             if (msgType === 'complete') {
                 clearTimeout(fallbackTimer);
-                element.innerHTML = `✅ ${baseText}: <span class="speed-result-value">${finalSpeed} Mbps</span>`;
+                element.innerHTML = `<span style="font-size:0.9em; color:#aaa;">${baseText}</span> <span class="speed-large-value ${colorClass}">${finalSpeed} Mbps</span>`;
                 speedtestWorker.removeEventListener('message', handler);
                 resolve(finalSpeed);
             }
@@ -485,22 +513,7 @@ async function measureSpeedWithWorker(type) {
     });
 }
 
-async function measureServiceLatency(url, element, name) {
-    if (!element) return 'N/A';
-    const times = [];
-    for (let i = 0; i < 3; i++) {
-        try {
-            const start = Date.now();
-            await fetch(`${url}?r=${Date.now()}`, { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(3000) });
-            times.push(Date.now() - start);
-            await new Promise(r => setTimeout(r, 500));
-        } catch (e) { return 'Failed'; }
-    }
-    const avg = Math.round(times.slice(1).reduce((a, b) => a + b, 0) / (times.length - 1));
-    element.innerHTML = `✅ ${name}: <span class="speed-result-value">${avg} ms</span>`;
-    return avg;
-}
-
+// 기존 패킷 로스 딥다이브 로직
 async function measurePacketLossDeepDive() {
     if (lossDisplay) lossDisplay.innerHTML = "<span style='color:orange'>Warmup & Analysis...</span>";
     const socketUrl = WS_URL;
@@ -599,7 +612,7 @@ async function measureNativeTool(cmd, args, label, timeoutMs) {
     if (!outputEl) return "UI Element Not Found";
 
     outputEl.style.color = '#ffca28';
-    outputEl.textContent = `⏳ [${label}] 진행 중...\n명령어: ${cmd} ${args}\n서버 응답 대기 중 (최대 ${timeoutMs/1000}초)...`;
+    outputEl.textContent = `⏳ [${label}] 진행 중...\n> ${cmd} ${args}\n서버 응답 대기 중 (최대 ${timeoutMs/1000}초)...`;
 
     if (window.Capacitor && window.Capacitor.Plugins.ShellExecutor) {
         try {
@@ -648,7 +661,11 @@ async function getLocation() {
             addressStr = `${data.address.country || ''}, ${data.address.city || data.address.town || ''}`;
             if (data.address.country_code) {
                 const detectedCode = data.address.country_code.toLowerCase();
-                if (countrySelector.querySelector(`option[value="${detectedCode}"]`)) { countrySelector.value = detectedCode; onCountryChange(); }
+                if (countrySelector.querySelector(`option[value="${detectedCode}"]`)) { 
+                    countrySelector.value = detectedCode; 
+                    countrySelector.classList.add('auto-filled'); // 📍 자동음영
+                    onCountryChange(); 
+                }
             }
         }
         currentAddress = addressStr; locationText.innerHTML = `📍 GPS: ${currentGpsCoords}<br>🏠 Address: ${currentAddress}`;
@@ -683,15 +700,22 @@ function loadHistory() {
     });
 }
 
+// 📍 플러그인 연동 및 자동 입력 음영 처리
 async function fetchNetworkInfoWithRetry(retryCount = 0) {
     if (retryCount > 10) return; 
     if (window.Capacitor && window.Capacitor.Plugins.NetworkInfo) {
         try {
             const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
             const testIdSel = document.getElementById('testIdSelector');
-            if (testIdSel && info.hplmnName) testIdSel.value = info.hplmnName; 
+            if (testIdSel && info.hplmnName) {
+                testIdSel.value = info.hplmnName; 
+                testIdSel.classList.add('auto-filled'); // 📍 자동음영
+            }
             const ratSel = document.getElementById('ratSelector');
-            if (ratSel && info.rat) ratSel.value = info.rat;
+            if (ratSel && info.rat) {
+                ratSel.value = info.rat;
+                ratSel.classList.add('auto-filled'); // 📍 자동음영
+            }
             const mnoSource = document.getElementById('mno-source');
             if (mnoSource && info.operatorName) mnoSource.innerText = ` (현재: ${info.operatorName})`;
 
