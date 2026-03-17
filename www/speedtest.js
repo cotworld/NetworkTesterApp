@@ -536,41 +536,42 @@ async function measureNativeTool(cmd, args, label, timeoutMs) {
             
             let finalResult = result;
 
-            // 📍 iperf3 결과일 경우 Opensignal 기준으로 재계산 수행
+            // 📍 iperf3 결과 Opensignal 기준 재계산 로직 (강력한 정규식 버전)
             if (cmd === 'iperf3' && result.includes('Lost/Total Datagrams')) {
                 try {
-                    // 로그에서 SUM 라인을 찾아 데이터 추출
-                    // 예시: [SUM] 0.00-10.00 sec 12.0 MBytes 10.1 Mbits/sec 4.354 ms 185797/194946 (81%) receiver
+                    // 1. [SUM] 라인의 "유실/전체" 패턴 추출 (예: 0/14702)
+                    // SUM 라인을 먼저 찾고, 그 라인 안에서 숫자/숫자 형태를 찾습니다.
                     const lines = result.split('\n');
-                    const sumLine = lines.find(l => l.includes('[SUM]') && l.includes('receiver'));
+                    const sumLine = lines.reverse().find(l => l.includes('[SUM]') && (l.includes('receiver') || l.includes('0/')));
                     
-                    if (sumLine) {
-                        const parts = sumLine.trim().split(/\s+/);
-                        // iperf3 출력 형식에 따라 인덱스가 다를 수 있으나 보통 뒤에서 4번째가 "Lost/Total"
-                        const lossPart = parts.find(p => p.includes('/')); 
-                        const outOfOrderMatch = result.match(/(\d+)\s+datagrams\s+received\s+out-of-order/);
+                    const lossPattern = /(\d+)\/(\d+)\s+\(/; // "숫자/숫자 (" 형태 찾기
+                    const match = sumLine ? sumLine.match(lossPattern) : result.match(lossPattern);
+                    
+                    // 2. Out-of-order 패턴 추출 (예: 94 datagrams received out-of-order)
+                    const outOfOrderMatch = result.match(/(\d+)\s+datagrams\s+received\s+out-of-order/);
+                    const outOfOrder = outOfOrderMatch ? parseInt(outOfOrderMatch[1], 10) : 0;
+
+                    if (match) {
+                        const lost = parseInt(match[1], 10);
+                        const total = parseInt(match[2], 10);
                         
-                        if (lossPart) {
-                            const [lost, total] = lossPart.split('/').map(Number);
-                            const outOfOrder = outOfOrderMatch ? parseInt(outOfOrderMatch[1], 10) : 0;
-                            
-                            // 📍 Opensignal 판단 로직: (순수 유실 + 순서 바뀜) / 전체
-                            const discarded = lost + outOfOrder;
-                            const opensignalLossRate = total > 0 ? ((discarded / total) * 100).toFixed(2) : 0;
-                            
-                            const osSummary = `\n\n--------------------------------------\n` +
-                                            `iperf3 (opensignal 판단기준 적용) : \n` +
-                                            `- 전체 패킷: ${total.toLocaleString()}\n` +
-                                            `- 순수 유실(Lost): ${lost.toLocaleString()}\n` +
-                                            `- 순서 뒤바뀜(Out-of-order): ${outOfOrder.toLocaleString()}\n` +
-                                            `- 최종 손실(Discarded): ${discarded.toLocaleString()}\n` +
-                                            `- 📢 재계산 유실률: ${opensignalLossRate}%\n` +
-                                            `--------------------------------------`;
-                            finalResult += osSummary;
-                        }
+                        // Opensignal 기준: (유실 + 순서바뀜) / 전체
+                        const discarded = lost + outOfOrder;
+                        const opensignalLossRate = total > 0 ? ((discarded / total) * 100).toFixed(2) : "0.00";
+                        
+                        const osSummary = `\n\n--------------------------------------\n` +
+                                        `iperf3 (opensignal 판단기준 적용) : \n` +
+                                        `- 전체 패킷: ${total.toLocaleString()}개\n` +
+                                        `- 순수 유실(Lost): ${lost.toLocaleString()}개\n` +
+                                        `- 순서 뒤바뀜(Out-of-order): ${outOfOrder.toLocaleString()}개\n` +
+                                        `- 최종 손실(Discarded): ${discarded.toLocaleString()}개\n` +
+                                        `- 📢 재계산 유실률: ${opensignalLossRate}%\n` +
+                                        `--------------------------------------`;
+                        finalResult += osSummary;
                     }
                 } catch (e) {
-                    console.error("Opensignal 파싱 에러:", e);
+                    console.error("OS 파싱 에러:", e);
+                    finalResult += `\n\n[파싱 에러: 데이터를 분석할 수 없습니다]`;
                 }
             }
 
