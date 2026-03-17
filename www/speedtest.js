@@ -1,13 +1,11 @@
-// speedtest.js (v3.1 - Dynamic UDP Loss, Micro-Gap & Stress Profile Integration)
+// speedtest.js (v3.2 - UI Optimized & Visual Banner Integration)
 
-// ▼ 서버 주소 하드코딩 (앱 빌드용) ▼
 const SERVER_URL = "https://speedtest.cotworld.synology.me:7749";
 const WS_URL = "wss://speedtest.cotworld.synology.me:3002";
 
 let fullMnoDatabase = {};
 let isDbLoadedFromWeb = false;
 
-// Fallback DB (Global Roaming Support)
 const fallbackMnoDatabase = {
     'af': { name: '아프가니스탄', mnos: ['AWCC', 'Etisalat', 'MTN', 'Roshan', 'Salaam'] },
     'al': { name: '알바니아', mnos: ['ALBtelecom', 'One', 'Vodafone'] },
@@ -117,15 +115,13 @@ let manualLocationValue = '';
 let isTestCancelled = false;
 let speedtestWorker;
 
-// DOM Elements
 let startButton, cancelButton, locationInfo, deviceInfo, countrySelector, mnoSelector, 
     ratSelector, testIdSelector, mnoSource, pingResult, downloadResult, uploadResult,
     youtubeLatency, instagramLatency, kakaotalkLatency, naverLatency, whatsappLatency,
     lossDisplay, historyContainer, showHistoryButton, clearHistoryButton, exportHistoryButton, 
-    historyTableBody, locationInput, refreshLocationBtn, locationText;
+    historyTableBody, locationInput, refreshLocationBtn, locationText, statusBanner;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 📍 1. 다크모드 테마 복구
     const themeToggle = document.getElementById('theme-toggle');
     if (themeToggle) {
         if (localStorage.getItem('theme') === 'dark') {
@@ -142,6 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     startButton = document.getElementById('startButton');
     cancelButton = document.getElementById('cancelButton');
+    statusBanner = document.getElementById('status-banner');
+    
     locationInfo = document.getElementById('location-info');
     deviceInfo = document.getElementById('device-info');
     countrySelector = document.getElementById('countrySelector');
@@ -182,7 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshLocationBtn.addEventListener('click', getLocation);
     if(locationInput) locationInput.addEventListener('input', (e) => manualLocationValue = e.target.value);
 
-    // 수동 실행 버튼 이벤트 (UI 버튼)
     const iperfBtn = document.getElementById('iperfButton');
     if(iperfBtn) iperfBtn.addEventListener('click', async () => {
         const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
@@ -197,13 +194,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let profileLabelStr = "일반";
         if (stressProfile === 'stress_bw') profileLabelStr = "극한";
         else if (stressProfile === 'stress_mtu') profileLabelStr = "MTU부하";
+        else if (stressProfile === 'stress_pps') profileLabelStr = "Opensignal모사";
         const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
 
-    let iperfArgs = "";
+        let iperfArgs = "";
         if (selectedProtocol === 'UDP') {
             if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`;
             else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`;
-            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`; // 📍 32Byte 패킷으로 초당 약 4000개 폭격!
+            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`;
             else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
         } else {
             if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
@@ -259,66 +257,76 @@ document.addEventListener('DOMContentLoaded', () => {
         isTestCancelled = true;
         cancelButton.disabled = true;
         cancelButton.textContent = 'Cancelling...';
-        startButton.classList.remove('button-loading');
+        
+        if (statusBanner) {
+            statusBanner.style.backgroundColor = '#F44336';
+            statusBanner.textContent = '🛑 측정이 취소되었습니다.';
+            setTimeout(() => statusBanner.style.display = 'none', 3000);
+        }
+        
         startButton.innerHTML = 'Stopping...';
         if (speedtestWorker) speedtestWorker.terminate();
     });
 
-    // 📍 2. 자동 연속 측정 메인 루프
+    // 📍 2. 자동 연속 측정 메인 루프 (UI 배너 업데이트 연동)
     startButton.addEventListener('click', async () => {
         isTestCancelled = false;
         startButton.disabled = true;
-        cancelButton.style.display = 'inline-block';
+        startButton.style.display = 'none'; // 시작 버튼은 숨기고
+        
+        cancelButton.style.display = 'block'; // 취소 버튼을 활성화
         cancelButton.disabled = false;
-        cancelButton.textContent = 'Cancel Test';
+        cancelButton.textContent = '🛑 측정 강제 취소 (Cancel Test)';
 
         const selectedMode = document.querySelector('input[name="testMode"]:checked').value;
         const loopCount = parseInt(selectedMode.split('회')[0], 10);
         
-        // 프로토콜 및 극한 스트레스 선택값 가져오기
         const protocolEl = document.querySelector('input[name="targetProtocol"]:checked');
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
         const profileEl = document.getElementById('iperfProfile');
         const stressProfile = profileEl ? profileEl.value : 'normal';
 
-        // 셀 하나에 기록될 표시 문자열 결합 (예: "UDP (극한)", "TCP (일반)")
         let profileLabelStr = "일반";
         if (stressProfile === 'stress_bw') profileLabelStr = "극한";
         else if (stressProfile === 'stress_mtu') profileLabelStr = "MTU부하";
+        else if (stressProfile === 'stress_pps') profileLabelStr = "Opensignal모사";
         
         const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
-
         const delay = ms => new Promise(res => setTimeout(res, ms));
-        const buttonTextSpan = document.createElement('span');
-        buttonTextSpan.className = 'button-text';
-        startButton.classList.add('button-loading');
-        startButton.innerHTML = '<span class="spinner"></span>';
-        startButton.appendChild(buttonTextSpan);
+
+        // 📍 진행 상태 배너 활성화
+        if (statusBanner) {
+            statusBanner.style.display = 'block';
+            statusBanner.style.backgroundColor = '#ff9800';
+        }
+
+        // 공통 UI 업데이트 헬퍼
+        const updateStatus = (currentLoop, totalLoop, stepName) => {
+            if (statusBanner) statusBanner.innerHTML = `⏳ [${currentLoop}/${totalLoop}회차] <br> ${stepName} 측정 중...`;
+        };
 
         for (let i = 1; i <= loopCount; i++) {
             if (isTestCancelled) break;
             
-            // 워커 재설정 (메모리 꼬임 방지)
             if (speedtestWorker) speedtestWorker.terminate();
             speedtestWorker = new Worker('speedtest-worker.js');
 
             [pingResult, downloadResult, uploadResult, youtubeLatency, instagramLatency, kakaotalkLatency, naverLatency, whatsappLatency].forEach(el => { if(el) el.innerHTML = ''; });
             if(lossDisplay) { lossDisplay.textContent = 'Ready'; lossDisplay.style.color = ''; }
 
-            // 📍 3. 순서 정상화 (서버 핑 우선 측정)
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Server Ping`;
+            updateStatus(i, loopCount, "Server Ping");
             const ping = await measureLatency();
             if (isTestCancelled) break;
 
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Download`;
+            updateStatus(i, loopCount, "Download Speed");
             const download = await measureSpeedWithWorker('download');
             if (isTestCancelled) break;
 
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Upload`;
+            updateStatus(i, loopCount, "Upload Speed");
             const upload = await measureSpeedWithWorker('upload');
             if (isTestCancelled) break;
 
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Services`;
+            updateStatus(i, loopCount, "Service Latency (SNS)");
             const services = [
                 { name: 'YouTube', url: 'https://www.youtube.com', element: youtubeLatency },
                 { name: 'Instagram', url: 'https://www.instagram.com', element: instagramLatency },
@@ -332,35 +340,34 @@ document.addEventListener('DOMContentLoaded', () => {
             services.forEach((s, idx) => serviceResults[s.name] = allResults[idx]);
             if (isTestCancelled) break;
 
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - Packet Loss`;
+            updateStatus(i, loopCount, "Packet Loss (S/M/L)");
             const packetLossData = await measurePacketLossDeepDive();
             if (isTestCancelled) break;
             await delay(200);
 
-            // 네이티브 도구(iperf3, traceroute) 자동 측정 및 스트레스 파라미터 분기
             const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
             const port = document.getElementById('iperfPort') ? document.getElementById('iperfPort').value : "5201";
 
-        let iperfArgs = "";
+            let iperfArgs = "";
             if (selectedProtocol === 'UDP') {
                 if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`;
                 else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`;
-                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`; // 📍 32Byte 패킷으로 초당 약 4000개 폭격!
+                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`;
                 else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
             } else {
                 if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
                 else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10 -R`;
                 else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10 -R`;
                 else iperfArgs = `-c ${host} -p ${port} -t 10`;
-        }
+            }
 
             const traceArgs = selectedProtocol === 'TCP' ? `-T ${host}` : `${host}`;
 
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - iperf3 [${combinedProtocolStr}]`;
+            updateStatus(i, loopCount, `iperf3 [${combinedProtocolStr}]`);
             const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${combinedProtocolStr})`, 30000); 
             if (isTestCancelled) break;
 
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - traceroute [${selectedProtocol}]`;
+            updateStatus(i, loopCount, `traceroute [${selectedProtocol}]`);
             const traceResultLog = await measureNativeTool('traceroute', traceArgs, `자동 traceroute (${selectedProtocol})`, 40000); 
             if (isTestCancelled) break;
 
@@ -384,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 location: currentAddress,
                 gps: currentGpsCoords,
                 manualLocation: manualLocationValue,
-                protocol: combinedProtocolStr, // 📍 이 값이 시트와 CSV에 "UDP (극한)" 형태로 기록됩니다.
+                protocol: combinedProtocolStr,
                 iperf3_log: iperfResultLog,
                 traceroute_log: traceResultLog
             };
@@ -394,19 +401,25 @@ document.addEventListener('DOMContentLoaded', () => {
             loadHistory();
 
             if (i < loopCount && !isTestCancelled) {
-                buttonTextSpan.textContent = `Waiting for next test...`;
+                updateStatus(i, loopCount, "다음 회차 대기 중...");
                 await delay(2000);
             }
         }
         
-        startButton.classList.remove('button-loading');
-        startButton.innerHTML = '';
+        // 측정 종료 후 원상복구
+        if (!isTestCancelled && statusBanner) {
+            statusBanner.style.backgroundColor = '#4CAF50';
+            statusBanner.innerHTML = '✅ 모든 측정이 완료되었습니다!';
+            setTimeout(() => statusBanner.style.display = 'none', 4000);
+        }
+        
+        startButton.style.display = 'block';
+        startButton.innerHTML = 'Start Test';
         cancelButton.style.display = 'none';
         checkSelections();
     });
 });
 
-// 📍 4. 핑 복원 (에러 무적 방어)
 async function measureLatency() {
     const pingTimes = [];
     pingResult.innerHTML = `⏳ Server Ping: <span class="speed-result-value">Measuring...</span>`;
@@ -431,7 +444,6 @@ function createOrUpdateProgressBar(el, prg, spd) {
     el.querySelector('.progress-bar').style.width = `${prg * 100}%`; el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
 }
 
-// 📍 5. 속도 측정 강제 타임아웃
 async function measureSpeedWithWorker(type) {
     const element = (type === 'download') ? downloadResult : uploadResult;
     const baseText = element.dataset ? element.dataset.baseText || (type === 'download' ? 'Download Speed' : 'Upload Speed') : (type === 'download' ? 'Download' : 'Upload');
@@ -582,7 +594,6 @@ async function measurePacketLossDeepDive() {
     });
 }
 
-// 📍 6. 네이티브 명령 타임아웃
 async function measureNativeTool(cmd, args, label, timeoutMs) {
     const outputEl = document.getElementById('shell-result');
     if (!outputEl) return "UI Element Not Found";
@@ -694,107 +705,3 @@ async function fetchNetworkInfoWithRetry(retryCount = 0) {
 }
 
 window.addEventListener('load', () => { fetchNetworkInfoWithRetry(); });
-
-// 📍 RRC Wake-up 분석 모드 추가
-document.addEventListener('DOMContentLoaded', () => {
-    const runRrcTestBtn = document.getElementById('runRrcTestBtn');
-    const rrcGrid = document.getElementById('rrcGrid');
-    const rrcResultText = document.getElementById('rrcResultText');
-
-    if (runRrcTestBtn) {
-        runRrcTestBtn.addEventListener('click', async () => {
-            runRrcTestBtn.disabled = true;
-            rrcGrid.innerHTML = '';
-            rrcResultText.innerHTML = '';
-
-            // 1. 그리드 100칸 회색으로 초기화
-            for (let i = 0; i < 100; i++) {
-                const box = document.createElement('div');
-                box.id = `rrc-box-${i}`;
-                box.style.width = '100%';
-                box.style.aspectRatio = '1';
-                box.style.backgroundColor = '#555'; // 회색(대기)
-                box.style.borderRadius = '2px';
-                rrcGrid.appendChild(box);
-            }
-
-            // 2. 강제 수면 유도 (10초 카운트다운)
-            for (let i = 10; i > 0; i--) {
-                runRrcTestBtn.textContent = `무선망 수면 유도 대기 중... (${i}초)`;
-                await new Promise(r => setTimeout(r, 1000));
-            }
-            runRrcTestBtn.textContent = `🚀 Micro-burst 발사 중!`;
-
-            // 3. 통신 연결 및 발사
-            const ws = new WebSocket(WS_URL);
-            let sentCount = 0;
-            let recvCount = 0;
-            const receivedSeqs = new Set();
-            const payload = 'W'.repeat(64); // 작은 패킷
-
-            ws.onopen = async () => {
-                // 연결되자마자 20ms 간격으로 100발 폭격
-                for (let i = 0; i < 100; i++) {
-                    ws.send(`PING:RRC:${i}:${payload}`);
-                    sentCount++;
-                    await new Promise(r => setTimeout(r, 20)); // 20ms 간격 발사
-                }
-                
-                // 마지막 패킷 발사 후 2초 대기 후 종료
-                setTimeout(() => {
-                    ws.close();
-                    analyzeRrcPattern();
-                }, 2000);
-            };
-
-            ws.onmessage = (event) => {
-                const msg = event.data.toString();
-                if (msg.startsWith('PONG:RRC:')) {
-                    const seq = parseInt(msg.split(':')[2], 10);
-                    receivedSeqs.add(seq);
-                    recvCount++;
-                    // 수신 성공 시 초록색으로 변경
-                    const box = document.getElementById(`rrc-box-${seq}`);
-                    if (box) box.style.backgroundColor = '#4CAF50'; 
-                }
-            };
-
-            ws.onerror = () => { rrcResultText.innerHTML = "❌ 웹소켓 연결 에러"; ws.close(); };
-
-            // 4. 패턴 분석 함수
-            function analyzeRrcPattern() {
-                let firstSuccessIndex = -1;
-                let redCount = 0;
-
-                // 못 받은 칸(빨간색) 칠하기 및 패턴 분석
-                for (let i = 0; i < 100; i++) {
-                    const box = document.getElementById(`rrc-box-${i}`);
-                    if (!receivedSeqs.has(i)) {
-                        if (box) box.style.backgroundColor = '#F44336'; // 빨간색(Loss)
-                        redCount++;
-                    } else {
-                        if (firstSuccessIndex === -1) firstSuccessIndex = i;
-                    }
-                }
-
-                // AI 진단 텍스트 출력
-                let insight = `<b>결과 요약:</b> 수신 ${recvCount}/100 (Loss ${redCount}%)<br><br>`;
-                
-                if (firstSuccessIndex > 5 && redCount > 10 && firstSuccessIndex >= redCount - 5) {
-                    // 앞부분이 뭉텅이로 날아간 전형적인 Paging Buffer Drop 패턴
-                    const delayMs = firstSuccessIndex * 20;
-                    insight += `<span style="color:#ff9800;">⚠️ <b>[버퍼 용량 제한 감지]</b></span><br>
-                    초기 패킷 ${firstSuccessIndex}개가 연속으로 유실되었습니다. 단말기가 수면 상태에서 깨어나는 데 약 <b>${delayMs}ms</b>가 소요되었으며, 이 연결 지연 시간 동안 SGW/PGW의 Paging Downlink Buffer 허용치를 초과하여 패킷이 폐기(Tail Drop)된 것으로 강하게 추정됩니다.`;
-                } else if (redCount > 0) {
-                    insight += `단발적인 패킷 유실이 관찰되었습니다. (일반적인 망 혼잡 또는 전파 품질 이슈)`;
-                } else {
-                    insight += `<span style="color:#4CAF50;">✅ 매우 훌륭한 상태입니다. 기상(Wake-up) 지연에 따른 유실이 전혀 없습니다.</span>`;
-                }
-
-                rrcResultText.innerHTML = insight;
-                runRrcTestBtn.textContent = 'RRC Wake-up 분석 다시 시작';
-                runRrcTestBtn.disabled = false;
-            }
-        });
-    }
-});

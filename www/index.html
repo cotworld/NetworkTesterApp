@@ -2,25 +2,66 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>로밍 품질 측정 v2.6 (Roaming Data Quality Test)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>로밍 품질 측정 v3.2 (UI Optimized)</title>
     <link rel="stylesheet" href="style.css">
     <script src="capacitor.js"></script>
+    <style>
+        /* 📱 모바일 반응형 강제 최적화 CSS */
+        * { box-sizing: border-box; }
+        body, .container { overflow-x: hidden; max-width: 100vw; }
+        
+        /* 라디오 버튼(측정횟수 등) 찌그러짐 방지 */
+        .radio-group-compact {
+            display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start;
+            background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border: 1px solid #444;
+        }
+        .radio-group-compact label {
+            display: flex; align-items: center; gap: 4px; font-size: 0.95rem; white-space: nowrap; cursor: pointer;
+        }
+
+        /* 메인 버튼 정렬 및 겹침 방지 */
+        .main-button-group {
+            display: flex; flex-direction: column; gap: 12px; margin-top: 20px; margin-bottom: 20px;
+        }
+        .main-button-group button {
+            width: 100%; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; word-break: keep-all;
+        }
+        
+        /* 🚨 눈에 확 띄는 측정 진행 상태 배너 */
+        #status-banner {
+            display: none; background-color: #ff9800; color: #fff; text-align: center;
+            padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 8px;
+            margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            animation: pulseBanner 1.5s infinite;
+        }
+        @keyframes pulseBanner { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+    </style>
 </head>
 <body>
     <div class="container">
         <div class="header-controls">
             <button id="theme-toggle">🌙</button>
         </div>
-        <h1>🌐 로밍 품질 측정 v2.6 (Auto & Native Diag)</h1>
+        <h1>🌐 로밍 품질 측정 v3.2</h1>
         
         <div id="location-info" class="result-item">
             <span id="location-text">📍 Click ⟳ to detect location</span>
-            <button id="refreshLocationBtn">⟳</button>
+            <button id="refreshLocationBtn" style="padding: 8px 15px;">⟳</button>
         </div>
         <div id="device-info" class="result-item"></div>
         
         <div class="selection-group">
+            <div class="selection-item">
+                <label style="color: #4CAF50; font-weight: bold; font-size: 1.1rem;">⏱️ 측정 횟수 (Test Count):</label>
+                <div class="radio-group-compact">
+                    <label><input type="radio" name="testMode" value="1회_측정" checked> 1회 (1 Time)</label>
+                    <label><input type="radio" name="testMode" value="3회_연속측정"> 3회 (3 Times)</label>
+                    <label><input type="radio" name="testMode" value="5회_연속측정"> 5회 (5 Times)</label>
+                    <label><input type="radio" name="testMode" value="10회_연속측정"> 10회 (10 Times)</label>
+                </div>
+            </div>
+
             <div class="selection-item">
                 <label for="countrySelector">국가 (Country):</label>
                 <select id="countrySelector" disabled>
@@ -30,9 +71,9 @@
             <div class="selection-item">
                 <label for="mnoSelector">통신사 (MNO):</label>
                 <select id="mnoSelector" disabled>
-                    <option value="">국가를 먼저 선택하세요 (Select Country first)</option>
+                    <option value="">국가를 먼저 선택하세요 (Select Country)</option>
                 </select>
-                <span id="mno-source"></span>
+                <span id="mno-source" style="font-size: 0.85em; color: #888;"></span>
             </div>
             <div class="selection-item">
                 <label for="ratSelector">네트워크 (RAT):</label>
@@ -51,22 +92,9 @@
                     <option value="LG U+">LG U+</option>
                     <option value="SKT">SKT</option>
                     <option value="KT">KT</option>
-                    <option value="트래블심">트래블심 (Travel SIM)</option>
-                    <option value="현지심">현지심 (Local SIM)</option>
+                    <option value="트래블심">트래블심</option>
+                    <option value="현지심">현지심</option>
                 </select>
-            </div>
-            <div class="selection-item">
-                <label>Test Count:</label>
-                <div class="radio-group">
-                    <input type="radio" id="mode1" name="testMode" value="1회_측정" checked>
-                    <label for="mode1">1 Time</label>
-                    <input type="radio" id="mode3" name="testMode" value="3회_연속측정">
-                    <label for="mode3">3 Times</label>
-                    <input type="radio" id="mode5" name="testMode" value="5회_연속측정">
-                    <label for="mode5">5 Times</label>
-                    <input type="radio" id="mode10" name="testMode" value="10회_연속측정">
-                    <label for="mode10">10 Times</label>
-                </div>
             </div>
             <div class="selection-item">
                 <label for="locationInput">장소 (Location - Optional):</label>
@@ -75,7 +103,7 @@
         </div>
 
         <div class="selection-group" style="background: var(--bg-secondary); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
-            <h4 style="margin-top: 0; color: #ffca28;">⚙️ 네이티브 진단 설정 (App Only)</h4>
+            <h4 style="margin-top: 0; color: #ffca28; font-size: 1.1rem;">⚙️ 네이티브 진단 설정 (App Only)</h4>
             
             <div class="selection-item">
                 <label for="iperfHost">대상 서버 (Target Host):</label>
@@ -88,29 +116,25 @@
             
             <div class="selection-item">
                 <label>프로토콜 (Protocol):</label>
-                <div style="display: flex; gap: 15px; align-items: center; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 5px;">
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                        <input type="radio" name="targetProtocol" value="UDP" checked> UDP (Default)
-                    </label>
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                        <input type="radio" name="targetProtocol" value="TCP"> TCP
-                    </label>
+                <div class="radio-group-compact">
+                    <label><input type="radio" name="targetProtocol" value="UDP" checked> UDP</label>
+                    <label><input type="radio" name="targetProtocol" value="TCP"> TCP</label>
                 </div>
             </div>
 
             <div class="selection-item">
-                    <label for="iperfProfile">Stress Profile:</label>
-                    <select id="iperfProfile">
-                        <option value="normal" selected>Normal (기본시험: 10Mbps, 10초)</option>
-                        <option value="stress_bw">🔥 Extreme (극한부하: 50M, 5-Stream)</option>
-                        <option value="stress_mtu">📦 MTU Overhead (MTU부하: 1460 Byte)</option>
-                        <option value="stress_pps">🔫 Opensignal 모사 (32Byte 초고속 폭격)</option> </select>
-                    </select>
+                <label for="iperfProfile">Stress Profile:</label>
+                <select id="iperfProfile" style="width: 100%;">
+                    <option value="normal" selected>Normal (기본: 10Mbps)</option>
+                    <option value="stress_bw">🔥 Extreme (극한: 50M, 5-Stream)</option>
+                    <option value="stress_mtu">📦 MTU Overhead (1460 Byte)</option>
+                    <option value="stress_pps">🔫 Opensignal 모사 (32Byte 폭격)</option>
+                </select>
             </div>
 
-            <div class="button-group" style="margin-top: 15px;">
-                <button id="iperfButton" style="background-color: #e91e63; flex: 1;">수동 iperf3 (5s)</button>
-                <button id="traceButton" style="background-color: #673ab7; flex: 1;">수동 traceroute</button>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button id="iperfButton" style="background-color: #e91e63; flex: 1; padding: 12px;">수동 iperf3 (5s)</button>
+                <button id="traceButton" style="background-color: #673ab7; flex: 1; padding: 12px;">수동 traceroute</button>
             </div>
             
             <div id="shell-result" style="background: #111; color: #0f0; padding: 12px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; margin-top: 10px; border-radius: 8px; max-height: 250px; overflow-y: auto; border: 1px solid #444;">
@@ -118,11 +142,13 @@
             </div>
         </div>
 
-        <div class="button-group">
-            <button id="startButton" disabled>국가, 사업자, 네트워크를 선택하세요 (Select Country, MNO, RAT)</button>
-            <button id="cancelButton" style="display: none;">측정 취소 (Cancel Test)</button>
+        <div class="main-button-group">
+            <button id="startButton" disabled style="background-color: #4CAF50; color: white;">국가/통신사를 선택하세요</button>
+            <button id="cancelButton" style="display: none; background-color: #F44336; color: white;">🛑 측정 강제 취소 (Cancel Test)</button>
         </div>
         
+        <div id="status-banner">🚀 측정 대기 중...</div>
+
         <hr>
 
         <div id="results">
@@ -149,28 +175,17 @@
         </div>
 
         <hr>
-        <div style="padding: 15px; background: #1e1e1e; border-radius: 8px; margin-top: 20px;">
-            <h3 style="color: #4CAF50; margin-top: 0;">🔬 RRC Wake-up (Paging Buffer) 분석기</h3>
-            <p style="font-size: 0.8em; color: #aaa;">테스트 시작 시 라디오 수면을 위해 10초간 대기 후, 100개의 Micro-burst 패킷을 전송합니다.</p>
-            
-            <button id="runRrcTestBtn" style="background-color: #ff9800; color: white; width: 100%; padding: 12px; font-weight: bold; border-radius: 5px;">RRC Wake-up 분석 시작</button>
-            
-            <div id="rrcGrid" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; margin-top: 15px;">
-                </div>
-            
-            <div id="rrcResultText" style="margin-top: 15px; font-size: 0.9em; line-height: 1.4;"></div>
+
+        <div class="history-controls" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+            <button id="showHistoryButton" style="padding: 12px;">기록 보기 (Show History)</button>
+            <button id="exportHistoryButton" style="background-color: #2196F3; padding: 12px;">기록 CSV로 내보내기</button>
+            <button id="clearHistoryButton" style="background-color: #607D8B; padding: 12px;">기록 전체 삭제</button>
         </div>
 
-        <div class="history-controls">
-            <button id="showHistoryButton">기록 보기 (Show History)</button>
-            <button id="exportHistoryButton">기록 CSV로 내보내기 (Export to CSV)</button>
-            <button id="clearHistoryButton">기록 전체 삭제 (Clear All History)</button>
-        </div>
-
-        <div id="history-container" style="display:none;">
+        <div id="history-container" style="display:none; margin-top: 20px;">
             <h2>📝 측정 기록 (Test History)</h2>
-            <div class="table-wrapper">
-                <table id="historyTable">
+            <div class="table-wrapper" style="overflow-x: auto;">
+                <table id="historyTable" style="width: 100%; text-align: center;">
                     <thead>
                         <tr>
                             <th>측정 시간</th>
@@ -201,10 +216,10 @@
                 </table>
             </div>
         </div>
-        <footer>
+        <footer style="text-align: center; margin-top: 30px; font-size: 0.8em; color: #888;">
             웹페이지 관련 문의 (Webpage inquiries) : cotworld@gmail.com
         </footer>
     </div>
-    <script src="speedtest.js?v=2.6"></script>
+    <script src="speedtest.js?v=3.2"></script>
 </body>
 </html>
