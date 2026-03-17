@@ -98,6 +98,15 @@
                 </div>
             </div>
 
+            <div class="selection-item">
+                    <label for="iperfProfile">Stress Profile:</label>
+                    <select id="iperfProfile">
+                        <option value="normal" selected>Normal (기본시험: 10Mbps, 10초)</option>
+                        <option value="stress_bw">🔥 Extreme (극한부하: 50M, 5-Stream)</option>
+                        <option value="stress_mtu">📦 MTU Overhead (MTU부하: 1460 Byte)</option>
+                    </select>
+            </div>
+
             <div class="button-group" style="margin-top: 15px;">
                 <button id="iperfButton" style="background-color: #e91e63; flex: 1;">수동 iperf3 (5s)</button>
                 <button id="traceButton" style="background-color: #673ab7; flex: 1;">수동 traceroute</button>

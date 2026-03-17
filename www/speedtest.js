@@ -1,4 +1,4 @@
-// speedtest.js (v1.8 - Dynamic UDP Loss & Micro-Gap Architecture)
+// speedtest.js (v3.1 - Dynamic UDP Loss, Micro-Gap & Stress Profile Integration)
 
 // ▼ 서버 주소 하드코딩 (앱 빌드용) ▼
 const SERVER_URL = "https://speedtest.cotworld.synology.me:7749";
@@ -187,10 +187,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if(iperfBtn) iperfBtn.addEventListener('click', async () => {
         const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
         const port = document.getElementById('iperfPort') ? document.getElementById('iperfPort').value : "5201";
+        
         const protocolEl = document.querySelector('input[name="targetProtocol"]:checked');
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
-        const iperfArgs = selectedProtocol === 'UDP' ? `-c ${host} -p ${port} -u -b 0 -t 5` : `-c ${host} -p ${port} -t 5`;
-        await measureNativeTool('iperf3', iperfArgs, `수동 iperf3 (${selectedProtocol})`, 15000);
+        
+        const profileEl = document.getElementById('iperfProfile');
+        const stressProfile = profileEl ? profileEl.value : 'normal';
+
+        let profileLabelStr = "일반";
+        if (stressProfile === 'stress_bw') profileLabelStr = "극한";
+        else if (stressProfile === 'stress_mtu') profileLabelStr = "MTU부하";
+        const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
+
+        let iperfArgs = "";
+        if (selectedProtocol === 'UDP') {
+            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
+            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
+            else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`;
+        } else {
+            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
+            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
+            else iperfArgs = `-c ${host} -p ${port} -t 10`;
+        }
+        
+        await measureNativeTool('iperf3', iperfArgs, `수동 iperf3 (${combinedProtocolStr})`, 15000);
     });
 
     const traceBtn = document.getElementById('traceButton');
@@ -253,8 +273,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedMode = document.querySelector('input[name="testMode"]:checked').value;
         const loopCount = parseInt(selectedMode.split('회')[0], 10);
         
+        // 프로토콜 및 극한 스트레스 선택값 가져오기
         const protocolEl = document.querySelector('input[name="targetProtocol"]:checked');
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
+        const profileEl = document.getElementById('iperfProfile');
+        const stressProfile = profileEl ? profileEl.value : 'normal';
+
+        // 셀 하나에 기록될 표시 문자열 결합 (예: "UDP (극한)", "TCP (일반)")
+        let profileLabelStr = "일반";
+        if (stressProfile === 'stress_bw') profileLabelStr = "극한";
+        else if (stressProfile === 'stress_mtu') profileLabelStr = "MTU부하";
+        
+        const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
 
         const delay = ms => new Promise(res => setTimeout(res, ms));
         const buttonTextSpan = document.createElement('span');
@@ -305,14 +335,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isTestCancelled) break;
             await delay(200);
 
+            // 네이티브 도구(iperf3, traceroute) 자동 측정 및 스트레스 파라미터 분기
             const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
             const port = document.getElementById('iperfPort') ? document.getElementById('iperfPort').value : "5201";
 
-            const iperfArgs = selectedProtocol === 'UDP' ? `-c ${host} -p ${port} -u -b 0 -t 5` : `-c ${host} -p ${port} -t 5`;
+            let iperfArgs = "";
+            if (selectedProtocol === 'UDP') {
+                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
+                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
+                else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`;
+            } else {
+                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
+                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
+                else iperfArgs = `-c ${host} -p ${port} -t 10`;
+            }
+
             const traceArgs = selectedProtocol === 'TCP' ? `-T ${host}` : `${host}`;
 
-            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - iperf3 [${selectedProtocol}]`;
-            const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${selectedProtocol})`, 15000); 
+            buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - iperf3 [${combinedProtocolStr}]`;
+            const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${combinedProtocolStr})`, 15000); 
             if (isTestCancelled) break;
 
             buttonTextSpan.textContent = `Testing (${i}/${loopCount}) - traceroute [${selectedProtocol}]`;
@@ -339,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 location: currentAddress,
                 gps: currentGpsCoords,
                 manualLocation: manualLocationValue,
-                protocol: selectedProtocol,
+                protocol: combinedProtocolStr, // 📍 이 값이 시트와 CSV에 "UDP (극한)" 형태로 기록됩니다.
                 iperf3_log: iperfResultLog,
                 traceroute_log: traceResultLog
             };
