@@ -215,7 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
     startButton.addEventListener('click', async () => {
         isTestCancelled = false;
         startButton.style.display = 'none'; cancelButton.style.display = 'block'; 
-        const loopCount = parseInt(document.querySelector('input[name="testMode"]:checked').value, 10);
+        
+        // 📍 1. 변수 누락으로 인한 앱 멈춤 문제 해결
+        const selectedMode = document.querySelector('input[name="testMode"]:checked').value;
+        const loopCount = parseInt(selectedMode.split('회')[0], 10);
+        
         const profile = profileEl.value;
         const protocol = document.querySelector('input[name="targetProtocol"]:checked').value;
         const host = document.getElementById('iperfHost').value;
@@ -264,6 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (profile === 'stress_dual') {
                 updateStatus(i, "iperf3 [Uplink]");
                 const ulRes = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, 'UL'), `자동 iperf3 (UL)`, 35000);
+                if (isTestCancelled) break;
                 updateStatus(i, "iperf3 [Downlink]");
                 const dlRes = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, 'DL'), `자동 iperf3 (DL)`, 35000);
                 iperfLog = `[UL]\n${ulRes}\n\n[DL]\n${dlRes}`;
@@ -271,6 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateStatus(i, "iperf3 Load Test");
                 iperfLog = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, ''), `자동 iperf3`, 35000);
             }
+            if (isTestCancelled) break;
 
             updateStatus(i, "traceroute Path");
             const traceLog = await measureNativeTool('traceroute', host, `자동 traceroute`, 40000);
@@ -290,6 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!isTestCancelled && statusBanner) { statusBanner.style.backgroundColor = '#4CAF50'; statusBanner.innerHTML = '✅ 완료!'; setTimeout(() => statusBanner.style.display = 'none', 4000); }
         startButton.style.display = 'block'; cancelButton.style.display = 'none';
+        checkSelections();
     });
 
     showHistoryButton.addEventListener('click', () => { historyContainer.style.display = historyContainer.style.display === 'none' ? 'block' : 'none'; showHistoryButton.textContent = historyContainer.style.display === 'none' ? '기록 보기' : '기록 숨기기'; });
@@ -316,7 +323,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// 📍 구글 시트 전송용 로그 요약 (OOO 문구 포함되도록 필터링 강화)
 function compressIperfLog(rawLog) {
     const lines = rawLog.split('\n');
     let summaryLines = lines.filter(line => 
@@ -336,13 +342,11 @@ function compressIperfLog(rawLog) {
     return summaryLines.join('\n') || "Log Summary Error";
 }
 
-// 📍 방화벽 회피를 위해 병렬(-P 5)을 빼고, 3사 공통 비교를 위해 대역폭을 20M로 하향
 function getIperfArgs(protocol, profile, host, port, forcedMode) {
     let args = `-c ${host} -p ${port} -t 10`;
     
     if (protocol === 'UDP') {
         args += ' -u';
-        // 병렬 옵션을 완전히 제거하고 단일 스트림으로 20M 전송
         if (profile === 'stress_bw' || profile === 'stress_dl' || profile === 'stress_dual') args += ' -b 20M';
         else if (profile === 'stress_mtu') args += ' -b 20M -l 1460';
         else if (profile === 'stress_pps') args += ' -b 1M -l 32';
@@ -358,7 +362,6 @@ function getIperfArgs(protocol, profile, host, port, forcedMode) {
     return args;
 }
 
-// 📍 네이티브 명령 실행 및 Opensignal 재계산 (OOO 명시 추가)
 async function measureNativeTool(cmd, args, label, timeoutMs) {
     const outputEl = document.getElementById('shell-result');
     if (!outputEl) return "UI Element Not Found";
@@ -458,7 +461,8 @@ async function measureSpeedWithWorker(type) {
     createOrUpdateProgressBar(element, 0, '0.00');
     return new Promise((resolve) => {
         if(!speedtestWorker) { resolve('Error'); return; }
-        const fallbackTimer = setTimeout(() => { element.innerHTML = `⚠️ ${baseText}: Timeout`; speedtestWorker.terminate(); resolve('Timeout'); }, 25000);
+        // 📍 3. 속도측정 강제 타임아웃 120초(120000ms)로 대폭 상향
+        const fallbackTimer = setTimeout(() => { element.innerHTML = `⚠️ ${baseText}: Timeout`; speedtestWorker.terminate(); resolve('Timeout'); }, 120000);
         const handler = (event) => {
             if (isTestCancelled) { clearTimeout(fallbackTimer); speedtestWorker.removeEventListener('message', handler); resolve('Cancelled'); return; }
             const { type: msgType, progress, speed, finalSpeed } = event.data;
@@ -494,7 +498,12 @@ async function getLocation() {
             addressStr = `${data.address.country || ''}, ${data.address.city || data.address.town || ''}`;
             if (data.address.country_code) {
                 const detectedCode = data.address.country_code.toLowerCase();
-                if (countrySelector.querySelector(`option[value="${detectedCode}"]`)) { countrySelector.value = detectedCode; onCountryChange(); }
+                if (countrySelector.querySelector(`option[value="${detectedCode}"]`)) { 
+                    countrySelector.value = detectedCode; 
+                    // 📍 2. 국가 자동 선택 시 음영 복구
+                    countrySelector.classList.add('auto-filled'); 
+                    onCountryChange(); 
+                }
             }
         }
         currentAddress = addressStr; locationText.innerHTML = `📍 GPS: ${currentGpsCoords}<br>🏠 Address: ${currentAddress}`;
@@ -522,7 +531,9 @@ function loadHistory() {
         const row = document.createElement('tr');
         const iperfStatus = r.iperf3_log && !r.iperf3_log.includes("Error") && !r.iperf3_log.includes("Timeout") ? "✅" : "❌";
         const traceStatus = r.traceroute_log && !r.traceroute_log.includes("Error") && !r.traceroute_log.includes("Timeout") ? "✅" : "❌";
-        row.innerHTML = `<td>${r.time}</td><td>${r.testId || 'N/A'}</td><td>${r.country}</td><td>${r.mno}</td><td>${r.rat}</td><td>${r.testMode}</td><td>${r.ping_avg}</td><td>${r.download}</td><td>${r.upload}</td><td>${r.packetLoss || '-'}</td><td>${r.youtube || ''}</td><td>${r.instagram || ''}</td><td>${r.kakao || ''}</td><td>${r.naver || ''}</td><td>${r.whatsapp || ''}</td><td>${r.device}</td><td>${r.location}</td><td>${r.gps || ''}</td><td>${r.manualLocation || ''}</td><td><b>${r.protocol}</b></td><td>${iperfStatus}</td><td>${traceStatus}</td>`;
+        const protocolDisplay = r.protocol ? r.protocol : '';
+
+        row.innerHTML = `<td>${r.time}</td><td>${r.testId || 'N/A'}</td><td>${r.country}</td><td>${r.mno}</td><td>${r.rat}</td><td>${r.testMode}</td><td>${r.ping_avg}</td><td>${r.download}</td><td>${r.upload}</td><td>${r.packetLoss || '-'}</td><td>${r.youtube || ''}</td><td>${r.instagram || ''}</td><td>${r.kakao || ''}</td><td>${r.naver || ''}</td><td>${r.whatsapp || ''}</td><td>${r.device}</td><td>${r.location}</td><td>${r.gps || ''}</td><td>${r.manualLocation || ''}</td><td><b>${protocolDisplay}</b></td><td>${iperfStatus}</td><td>${traceStatus}</td>`;
         historyTableBody.appendChild(row);
     });
 }
@@ -533,9 +544,16 @@ async function fetchNetworkInfoWithRetry(retryCount = 0) {
         try {
             const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
             const testIdSel = document.getElementById('testIdSelector');
-            if (testIdSel && info.hplmnName) testIdSel.value = info.hplmnName; 
+            // 📍 2. 시험번호/망 자동 감지 시 음영 복구
+            if (testIdSel && info.hplmnName) {
+                testIdSel.value = info.hplmnName; 
+                testIdSel.classList.add('auto-filled');
+            }
             const ratSel = document.getElementById('ratSelector');
-            if (ratSel && info.rat) ratSel.value = info.rat;
+            if (ratSel && info.rat) {
+                ratSel.value = info.rat;
+                ratSel.classList.add('auto-filled');
+            }
             const mnoSource = document.getElementById('mno-source');
             if (mnoSource && info.operatorName) mnoSource.innerText = ` (현재: ${info.operatorName})`;
 
