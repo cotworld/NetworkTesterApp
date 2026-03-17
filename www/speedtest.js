@@ -201,12 +201,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let iperfArgs = "";
         if (selectedProtocol === 'UDP') {
-            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
-            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
-            else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`;
+            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`; // 📍 다운로드 폭격 (-R)
+            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`; // 📍 다운로드 폭격 (-R)
+            else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; // 일반은 기존 업로드 유지
         } else {
-            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
-            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
+            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
+            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10 -R`;
             else iperfArgs = `-c ${host} -p ${port} -t 10`;
         }
         
@@ -341,12 +341,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let iperfArgs = "";
             if (selectedProtocol === 'UDP') {
-                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
-                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
-                else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`;
+                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`; // 📍 다운로드 폭격 (-R)
+                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`; // 📍 다운로드 폭격 (-R)
+                else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; // 일반은 기존 업로드 유지
             } else {
-                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
-                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
+                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
+                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10 -R`;
                 else iperfArgs = `-c ${host} -p ${port} -t 10`;
             }
 
