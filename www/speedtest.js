@@ -690,3 +690,107 @@ async function fetchNetworkInfoWithRetry(retryCount = 0) {
 }
 
 window.addEventListener('load', () => { fetchNetworkInfoWithRetry(); });
+
+// 📍 RRC Wake-up 분석 모드 추가
+document.addEventListener('DOMContentLoaded', () => {
+    const runRrcTestBtn = document.getElementById('runRrcTestBtn');
+    const rrcGrid = document.getElementById('rrcGrid');
+    const rrcResultText = document.getElementById('rrcResultText');
+
+    if (runRrcTestBtn) {
+        runRrcTestBtn.addEventListener('click', async () => {
+            runRrcTestBtn.disabled = true;
+            rrcGrid.innerHTML = '';
+            rrcResultText.innerHTML = '';
+
+            // 1. 그리드 100칸 회색으로 초기화
+            for (let i = 0; i < 100; i++) {
+                const box = document.createElement('div');
+                box.id = `rrc-box-${i}`;
+                box.style.width = '100%';
+                box.style.aspectRatio = '1';
+                box.style.backgroundColor = '#555'; // 회색(대기)
+                box.style.borderRadius = '2px';
+                rrcGrid.appendChild(box);
+            }
+
+            // 2. 강제 수면 유도 (10초 카운트다운)
+            for (let i = 10; i > 0; i--) {
+                runRrcTestBtn.textContent = `무선망 수면 유도 대기 중... (${i}초)`;
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            runRrcTestBtn.textContent = `🚀 Micro-burst 발사 중!`;
+
+            // 3. 통신 연결 및 발사
+            const ws = new WebSocket(WS_URL);
+            let sentCount = 0;
+            let recvCount = 0;
+            const receivedSeqs = new Set();
+            const payload = 'W'.repeat(64); // 작은 패킷
+
+            ws.onopen = async () => {
+                // 연결되자마자 20ms 간격으로 100발 폭격
+                for (let i = 0; i < 100; i++) {
+                    ws.send(`PING:RRC:${i}:${payload}`);
+                    sentCount++;
+                    await new Promise(r => setTimeout(r, 20)); // 20ms 간격 발사
+                }
+                
+                // 마지막 패킷 발사 후 2초 대기 후 종료
+                setTimeout(() => {
+                    ws.close();
+                    analyzeRrcPattern();
+                }, 2000);
+            };
+
+            ws.onmessage = (event) => {
+                const msg = event.data.toString();
+                if (msg.startsWith('PONG:RRC:')) {
+                    const seq = parseInt(msg.split(':')[2], 10);
+                    receivedSeqs.add(seq);
+                    recvCount++;
+                    // 수신 성공 시 초록색으로 변경
+                    const box = document.getElementById(`rrc-box-${seq}`);
+                    if (box) box.style.backgroundColor = '#4CAF50'; 
+                }
+            };
+
+            ws.onerror = () => { rrcResultText.innerHTML = "❌ 웹소켓 연결 에러"; ws.close(); };
+
+            // 4. 패턴 분석 함수
+            function analyzeRrcPattern() {
+                let firstSuccessIndex = -1;
+                let redCount = 0;
+
+                // 못 받은 칸(빨간색) 칠하기 및 패턴 분석
+                for (let i = 0; i < 100; i++) {
+                    const box = document.getElementById(`rrc-box-${i}`);
+                    if (!receivedSeqs.has(i)) {
+                        if (box) box.style.backgroundColor = '#F44336'; // 빨간색(Loss)
+                        redCount++;
+                    } else {
+                        if (firstSuccessIndex === -1) firstSuccessIndex = i;
+                    }
+                }
+
+                // AI 진단 텍스트 출력
+                let insight = `<b>결과 요약:</b> 수신 ${recvCount}/100 (Loss ${redCount}%)<br><br>`;
+                
+                if (firstSuccessIndex > 5 && redCount > 10 && firstSuccessIndex >= redCount - 5) {
+                    // 앞부분이 뭉텅이로 날아간 전형적인 Paging Buffer Drop 패턴
+                    const delayMs = firstSuccessIndex * 20;
+                    insight += `<span style="color:#ff9800;">⚠️ <b>[버퍼 용량 제한 감지]</b></span><br>
+                    초기 패킷 ${firstSuccessIndex}개가 연속으로 유실되었습니다. 단말기가 수면 상태에서 깨어나는 데 약 <b>${delayMs}ms</b>가 소요되었으며, 이 연결 지연 시간 동안 SGW/PGW의 Paging Downlink Buffer 허용치를 초과하여 패킷이 폐기(Tail Drop)된 것으로 강하게 추정됩니다.`;
+                } else if (redCount > 0) {
+                    insight += `단발적인 패킷 유실이 관찰되었습니다. (일반적인 망 혼잡 또는 전파 품질 이슈)`;
+                } else {
+                    insight += `<span style="color:#4CAF50;">✅ 매우 훌륭한 상태입니다. 기상(Wake-up) 지연에 따른 유실이 전혀 없습니다.</span>`;
+                }
+
+                rrcResultText.innerHTML = insight;
+                runRrcTestBtn.textContent = 'RRC Wake-up 분석 다시 시작';
+                runRrcTestBtn.disabled = false;
+            }
+        });
+    }
+});

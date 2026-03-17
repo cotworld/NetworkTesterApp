@@ -147,6 +147,19 @@
             </div>
         </div>
 
+        <hr>
+        <div style="padding: 15px; background: #1e1e1e; border-radius: 8px; margin-top: 20px;">
+            <h3 style="color: #4CAF50; margin-top: 0;">🔬 RRC Wake-up (Paging Buffer) 분석기</h3>
+            <p style="font-size: 0.8em; color: #aaa;">테스트 시작 시 라디오 수면을 위해 10초간 대기 후, 100개의 Micro-burst 패킷을 전송합니다.</p>
+            
+            <button id="runRrcTestBtn" style="background-color: #ff9800; color: white; width: 100%; padding: 12px; font-weight: bold; border-radius: 5px;">RRC Wake-up 분석 시작</button>
+            
+            <div id="rrcGrid" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; margin-top: 15px;">
+                </div>
+            
+            <div id="rrcResultText" style="margin-top: 15px; font-size: 0.9em; line-height: 1.4;"></div>
+        </div>
+
         <div class="history-controls">
             <button id="showHistoryButton">기록 보기 (Show History)</button>
             <button id="exportHistoryButton">기록 CSV로 내보내기 (Export to CSV)</button>
