@@ -199,14 +199,16 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (stressProfile === 'stress_mtu') profileLabelStr = "MTU부하";
         const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
 
-        let iperfArgs = "";
+    let iperfArgs = "";
         if (selectedProtocol === 'UDP') {
-            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`; // 📍 다운로드 폭격 (-R)
-            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`; // 📍 다운로드 폭격 (-R)
-            else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; // 일반은 기존 업로드 유지
+            if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`;
+            else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`;
+            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`; // 📍 32Byte 패킷으로 초당 약 4000개 폭격!
+            else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
         } else {
             if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
             else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10 -R`;
+            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10 -R`;
             else iperfArgs = `-c ${host} -p ${port} -t 10`;
         }
         
@@ -339,16 +341,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const host = document.getElementById('iperfHost') ? document.getElementById('iperfHost').value : "180.228.85.25";
             const port = document.getElementById('iperfPort') ? document.getElementById('iperfPort').value : "5201";
 
-            let iperfArgs = "";
+        let iperfArgs = "";
             if (selectedProtocol === 'UDP') {
-                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`; // 📍 다운로드 폭격 (-R)
-                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`; // 📍 다운로드 폭격 (-R)
-                else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; // 일반은 기존 업로드 유지
+                if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10 -R`;
+                else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10 -R`;
+                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10 -R`; // 📍 32Byte 패킷으로 초당 약 4000개 폭격!
+                else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
             } else {
                 if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10 -R`;
                 else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10 -R`;
+                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10 -R`;
                 else iperfArgs = `-c ${host} -p ${port} -t 10`;
-            }
+        }
 
             const traceArgs = selectedProtocol === 'TCP' ? `-T ${host}` : `${host}`;
 
