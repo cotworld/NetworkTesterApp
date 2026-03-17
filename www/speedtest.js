@@ -180,6 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshLocationBtn.addEventListener('click', getLocation);
     if(locationInput) locationInput.addEventListener('input', (e) => manualLocationValue = e.target.value);
 
+    // 📍 3. 상세 설정 접기/펼치기 및 프로필 선택 시 자동 펼침 로직
     const profileEl = document.getElementById('iperfProfile');
     const advancedSettings = document.getElementById('advanced-native-settings');
     const advancedToggle = document.getElementById('advanced-native-toggle');
@@ -194,7 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (profileEl) {
         profileEl.addEventListener('change', (e) => {
-            if (e.target.value !== 'normal') {
+            // 극한이나 MTU 선택 시 상세 설정 영역을 스르륵 펼쳐줌
+            if (e.target.value === 'stress_bw' || e.target.value === 'stress_mtu') {
                 advancedSettings.style.display = 'block';
                 if(advancedToggle) advancedToggle.textContent = '▲ 상세 설정 접기';
             }
@@ -209,19 +211,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
         const stressProfile = profileEl ? profileEl.value : 'normal';
 
-        let profileLabelStr = stressProfile === 'stress_bw' ? "극한" : (stressProfile === 'stress_mtu' ? "MTU부하" : (stressProfile === 'stress_pps' ? "Opensignal모사" : "일반"));
+        let profileLabelStr = stressProfile === 'stress_bw' ? "극한" : (stressProfile === 'stress_mtu' ? "MTU부하" : "일반");
         const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
 
+        // -R 옵션 제거 완료
         let iperfArgs = "";
         if (selectedProtocol === 'UDP') {
             if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
             else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
-            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10`; 
             else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
         } else {
             if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
             else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
-            else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10`;
             else iperfArgs = `-c ${host} -p ${port} -t 10`;
         }
         await measureNativeTool('iperf3', iperfArgs, `수동 iperf3 (${combinedProtocolStr})`, 30000);
@@ -249,10 +250,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 📍 CSV 내보내기 헤더 원복 (packetLoss라는 변수명을 그대로 유지하여 시트와 완벽 호환)
     exportHistoryButton.addEventListener('click', () => {
         const history = JSON.parse(localStorage.getItem('speedtestHistory')) || [];
         if (history.length === 0) return alert('내보낼 기록이 없습니다.');
-        const headers = ["time", "testId", "country", "mno", "rat", "testMode", "ping_avg", "jitter", "ttfb", "download", "upload", "youtube", "instagram", "kakao", "naver", "whatsapp", "manualLocation", "device", "location", "gps", "protocol", "iperf3_log", "traceroute_log"];
+        const headers = ["time", "testId", "country", "mno", "rat", "testMode", "ping_avg", "download", "upload", "packetLoss", "youtube", "instagram", "kakao", "naver", "whatsapp", "manualLocation", "device", "location", "gps", "protocol", "iperf3_log", "traceroute_log"];
         let csvContent = headers.join(',') + '\n';
         history.forEach(row => {
             const values = headers.map(header => `"${('' + (row[header] || '')).replace(/"/g, '""')}"`);
@@ -291,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedProtocol = protocolEl ? protocolEl.value : 'UDP';
         const stressProfile = profileEl ? profileEl.value : 'normal';
 
-        let profileLabelStr = stressProfile === 'stress_bw' ? "극한" : (stressProfile === 'stress_mtu' ? "MTU부하" : (stressProfile === 'stress_pps' ? "Opensignal모사" : "일반"));
+        let profileLabelStr = stressProfile === 'stress_bw' ? "극한" : (stressProfile === 'stress_mtu' ? "MTU부하" : "일반");
         const combinedProtocolStr = `${selectedProtocol} (${profileLabelStr})`;
         const delay = ms => new Promise(res => setTimeout(res, ms));
 
@@ -302,7 +304,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const updateStatus = (currentLoop, totalLoop, stepName) => {
             if (statusBanner) statusBanner.innerHTML = `⏳ [${currentLoop}/${totalLoop}회차] <br> ${stepName} 측정 중...`;
-            document.getElementById('shell-result').scrollIntoView({ behavior: 'smooth', block: 'end' });
+            // 터미널 창도 보이도록 살짝 아래로 포커스
+            const shellEl = document.getElementById('shell-result');
+            if (shellEl) shellEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
         };
 
         for (let i = 1; i <= loopCount; i++) {
@@ -311,10 +315,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (speedtestWorker) speedtestWorker.terminate();
             speedtestWorker = new Worker('speedtest-worker.js');
 
+            // UI 텍스트 초기화
             [pingResult, jitterResult, ttfbResult, downloadResult, uploadResult, youtubeLatency, instagramLatency, kakaotalkLatency, naverLatency, whatsappLatency].forEach(el => { if(el) el.innerHTML = ''; });
 
-            updateStatus(i, loopCount, "네트워크 응답성 (Ping & Jitter)");
-            const { avg: pingAvg, jitter: pingJitter, ttfb } = await measureLatencyAndJitter();
+            updateStatus(i, loopCount, "네트워크 응답성 (Ping/Jitter)");
+            const { avg: pingAvg, jitter: pingJitter, ttfb: pingTtfb } = await measureLatencyAndJitter();
             if (isTestCancelled) break;
 
             updateStatus(i, loopCount, "다운로드 속도 (DL)");
@@ -325,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const upload = await measureSpeedWithWorker('upload');
             if (isTestCancelled) break;
 
-            updateStatus(i, loopCount, "SNS 지연시간 측정");
+            updateStatus(i, loopCount, "SNS 연결 지연시간");
             const services = [
                 { name: 'YouTube', url: 'https://www.youtube.com', element: youtubeLatency },
                 { name: 'Instagram', url: 'https://www.instagram.com', element: instagramLatency },
@@ -346,23 +351,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedProtocol === 'UDP') {
                 if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -u -b 50M -P 5 -t 10`;
                 else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -u -b 20M -l 1460 -t 10`;
-                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -u -b 1M -l 32 -t 10`; 
                 else iperfArgs = `-c ${host} -p ${port} -u -b 10M -t 10`; 
             } else {
                 if (stressProfile === 'stress_bw') iperfArgs = `-c ${host} -p ${port} -P 5 -t 10`;
                 else if (stressProfile === 'stress_mtu') iperfArgs = `-c ${host} -p ${port} -M 1460 -t 10`;
-                else if (stressProfile === 'stress_pps') iperfArgs = `-c ${host} -p ${port} -M 32 -t 10`;
                 else iperfArgs = `-c ${host} -p ${port} -t 10`;
             }
             const traceArgs = selectedProtocol === 'TCP' ? `-T ${host}` : `${host}`;
 
-            updateStatus(i, loopCount, `네이티브 iperf3 [${combinedProtocolStr}]`);
+            updateStatus(i, loopCount, `iperf3 대역폭 부하 [${combinedProtocolStr}]`);
             const iperfResultLog = await measureNativeTool('iperf3', iperfArgs, `자동 iperf3 (${combinedProtocolStr})`, 30000); 
             if (isTestCancelled) break;
 
-            updateStatus(i, loopCount, `네이티브 traceroute [${selectedProtocol}]`);
+            updateStatus(i, loopCount, `traceroute 라우팅 추적 [${selectedProtocol}]`);
             const traceResultLog = await measureNativeTool('traceroute', traceArgs, `자동 traceroute (${selectedProtocol})`, 40000); 
             if (isTestCancelled) break;
+
+            // 📍 6. 구글 시트 오류 해결의 핵심: packetLoss 변수 안에 Jitter와 TTFB 텍스트를 통째로 압축해서 저장!
+            const combinedLossAnalysis = `Jitter: ${pingJitter} ms / TTFB: ${pingTtfb} ms`;
 
             const resultData = {
                 time: new Date().toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }),
@@ -372,10 +378,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 rat: ratSelector.value,
                 testMode: selectedMode,
                 ping_avg: pingAvg,
-                jitter: pingJitter,
-                ttfb: ttfb,
                 download: download,
                 upload: upload,
+                packetLoss: combinedLossAnalysis, // 📍 이 값이 그대로 시트의 원래 자리로 들어갑니다!
                 youtube: serviceResults.YouTube,
                 instagram: serviceResults.Instagram,
                 kakao: serviceResults.Kakao,
@@ -412,46 +417,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// 📍 Ping, Jitter, TTFB 통합 측정 함수
+// 📍 형광색 ms 포맷팅 및 Jitter/TTFB 계산
 async function measureLatencyAndJitter() {
     const pingTimes = [];
-    pingResult.innerHTML = `서버 Ping: <span class="highlight-ms">측정중</span>`;
-    jitterResult.innerHTML = `Jitter: <span class="highlight-ms">측정중</span>`;
-    ttfbResult.innerHTML = `Web TTFB: <span class="highlight-ms">측정중</span>`;
+    pingResult.innerHTML = `서버Ping:<span class="highlight-ms">측정중</span>`;
+    jitterResult.innerHTML = `Jitter:<span class="highlight-ms">측정중</span>`;
+    ttfbResult.innerHTML = `TTFB:<span class="highlight-ms">측정중</span>`;
     
     let firstTTFB = 0;
 
-    for (let i = 0; i < 5; i++) { // Jitter 정확도를 위해 5번 측정
+    for (let i = 0; i < 5; i++) {
         try {
             const start = Date.now();
             const res = await fetch(SERVER_URL + '/ping.txt?r=' + Date.now(), { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(3000) });
             const time = Date.now() - start;
             pingTimes.push(time);
-            if (i === 0) firstTTFB = time; // 첫 연결(TTFB) 시간 별도 저장
+            if (i === 0) firstTTFB = time; 
             await new Promise(r => setTimeout(r, 200));
         } catch (e) { 
-            pingResult.innerHTML = `서버 Ping: <span class="highlight-ms" style="color:#F44336;">Fail</span>`;
+            pingResult.innerHTML = `서버Ping:<span class="highlight-ms" style="color:#F44336;">Fail</span>`;
             return { avg: 'N/A', jitter: 'N/A', ttfb: 'N/A' }; 
         }
     }
     
-    // 평균 Ping 계산 (첫 번째 연결 제외)
     const validPings = pingTimes.slice(1);
     const avgPing = Math.round(validPings.reduce((a, b) => a + b, 0) / validPings.length);
-    
-    // Jitter 계산 (평균 편차)
     const jitter = Math.round(validPings.reduce((a, b) => a + Math.abs(b - avgPing), 0) / validPings.length);
 
-    pingResult.innerHTML = `서버 Ping: <span class="highlight-ms">${avgPing} ms</span>`;
-    jitterResult.innerHTML = `Jitter: <span class="highlight-ms">${jitter} ms</span>`;
-    ttfbResult.innerHTML = `Web TTFB: <span class="highlight-ms">${firstTTFB} ms</span>`;
+    pingResult.innerHTML = `서버Ping:<span class="highlight-ms">${avgPing} ms</span>`;
+    jitterResult.innerHTML = `Jitter:<span class="highlight-ms">${jitter} ms</span>`;
+    ttfbResult.innerHTML = `TTFB:<span class="highlight-ms">${firstTTFB} ms</span>`;
     
     return { avg: avgPing, jitter: jitter, ttfb: firstTTFB };
 }
 
 async function measureServiceLatency(url, element, name) {
     if (!element) return 'N/A';
-    element.innerHTML = `${name}: <span class="highlight-ms" style="color:#888;">...</span>`;
+    element.innerHTML = `${name}:<span class="highlight-ms" style="color:#888;">...</span>`;
     const times = [];
     for (let i = 0; i < 3; i++) {
         try {
@@ -460,16 +462,15 @@ async function measureServiceLatency(url, element, name) {
             times.push(Date.now() - start);
             await new Promise(r => setTimeout(r, 400));
         } catch (e) { 
-            element.innerHTML = `${name}: <span class="highlight-ms" style="color:#F44336;">Fail</span>`;
+            element.innerHTML = `${name}:<span class="highlight-ms" style="color:#F44336;">Fail</span>`;
             return 'Failed'; 
         }
     }
     const avg = Math.round(times.slice(1).reduce((a, b) => a + b, 0) / (times.length - 1));
-    element.innerHTML = `${name}: <span class="highlight-ms">${avg} ms</span>`;
+    element.innerHTML = `${name}:<span class="highlight-ms">${avg} ms</span>`;
     return avg;
 }
 
-// 큰 폰트 다운로드/업로드 적용
 function createOrUpdateProgressBar(el, prg, spd) {
     if (!el.querySelector('.progress-container')) el.innerHTML = '<div class="progress-container" style="margin-top:5px; background:rgba(150,150,150,0.3); border-radius:4px; overflow:hidden;"><div class="progress-bar" style="height:8px; background:#2196F3; width:0%; transition: width 0.3s;"></div></div><div class="progress-text" style="font-size:0.85em; margin-top:3px; color:#888;"></div>';
     el.querySelector('.progress-bar').style.width = `${prg * 100}%`; 
@@ -574,7 +575,7 @@ async function getLocation() {
                 const detectedCode = data.address.country_code.toLowerCase();
                 if (countrySelector.querySelector(`option[value="${detectedCode}"]`)) { 
                     countrySelector.value = detectedCode; 
-                    countrySelector.classList.add('auto-filled');
+                    countrySelector.classList.add('auto-filled'); // 📍 1. 자동입력 음영
                     onCountryChange(); 
                 }
             }
@@ -606,7 +607,7 @@ function loadHistory() {
         const traceStatus = r.traceroute_log && !r.traceroute_log.includes("Error") && !r.traceroute_log.includes("Timeout") ? "✅" : "❌";
         const protocolDisplay = r.protocol ? r.protocol : '';
 
-        row.innerHTML = `<td>${r.time}</td><td>${r.testId || 'N/A'}</td><td>${r.country}</td><td>${r.mno}</td><td>${r.rat}</td><td>${r.testMode}</td><td>${r.ping_avg}</td><td>${r.jitter || '-'}</td><td>${r.ttfb || '-'}</td><td>${r.download}</td><td>${r.upload}</td><td>${r.youtube || ''}</td><td>${r.instagram || ''}</td><td>${r.kakao || ''}</td><td>${r.naver || ''}</td><td>${r.whatsapp || ''}</td><td>${r.device}</td><td>${r.location}</td><td>${r.gps || ''}</td><td><b>${protocolDisplay}</b></td><td>${iperfStatus}</td><td>${traceStatus}</td>`;
+        row.innerHTML = `<td>${r.time}</td><td>${r.testId || 'N/A'}</td><td>${r.country}</td><td>${r.mno}</td><td>${r.rat}</td><td>${r.testMode}</td><td>${r.ping_avg}</td><td>${r.download}</td><td>${r.upload}</td><td>${r.packetLoss || '-'}</td><td>${r.youtube || ''}</td><td>${r.instagram || ''}</td><td>${r.kakao || ''}</td><td>${r.naver || ''}</td><td>${r.whatsapp || ''}</td><td>${r.device}</td><td>${r.location}</td><td>${r.gps || ''}</td><td>${r.manualLocation || ''}</td><td><b>${protocolDisplay}</b></td><td>${iperfStatus}</td><td>${traceStatus}</td>`;
         historyTableBody.appendChild(row);
     });
 }
@@ -619,12 +620,12 @@ async function fetchNetworkInfoWithRetry(retryCount = 0) {
             const testIdSel = document.getElementById('testIdSelector');
             if (testIdSel && info.hplmnName) {
                 testIdSel.value = info.hplmnName; 
-                testIdSel.classList.add('auto-filled');
+                testIdSel.classList.add('auto-filled'); // 📍 1. 자동입력 음영
             }
             const ratSel = document.getElementById('ratSelector');
             if (ratSel && info.rat) {
                 ratSel.value = info.rat;
-                ratSel.classList.add('auto-filled');
+                ratSel.classList.add('auto-filled'); // 📍 1. 자동입력 음영
             }
             const mnoSource = document.getElementById('mno-source');
             if (mnoSource && info.operatorName) mnoSource.innerText = ` (현재: ${info.operatorName})`;
