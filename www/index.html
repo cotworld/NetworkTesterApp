@@ -3,29 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>로밍 품질 측정 v4.3 (Dual Stress)</title>
+    <title>로밍 품질 측정 v4.6</title>
     <link rel="stylesheet" href="style.css">
     <script src="capacitor.js"></script>
     <style>
-        /* 📱 모바일 반응형 강제 최적화 */
         * { box-sizing: border-box; }
         body, .container { overflow-x: hidden; max-width: 100vw; transition: background-color 0.3s, color 0.3s; }
         
         /* 자동 입력 칸 음영 처리 */
-        .auto-filled {
-            background-color: rgba(76, 175, 80, 0.15) !important;
-            border: 2px solid #4CAF50 !important;
-            color: #000 !important;
-            font-weight: bold;
-        }
+        .auto-filled { background-color: rgba(76, 175, 80, 0.15) !important; border: 2px solid #4CAF50 !important; color: inherit !important; }
         body.dark-theme .auto-filled { color: #fff !important; }
+
+        .ping-metrics-container { display: flex; flex-wrap: wrap; gap: 10px 15px; background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; margin-bottom: 15px; }
+        body.dark-theme .ping-metrics-container { background: rgba(0,0,0,0.2); }
+        .ping-item { font-size: 0.85rem; font-weight: 500; color: #444; white-space: nowrap; }
+        body.dark-theme .ping-item { color: #ddd; }
+        .highlight-ms { color: #2e7d32; font-weight: 900; font-size: 1.1em; margin-left: 3px; }
+        body.dark-theme .highlight-ms { color: #00e676; }
 
         .radio-group-compact { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; border: 1px solid #ccc; }
         body.dark-theme .radio-group-compact { background: rgba(255,255,255,0.05); border-color: #444; }
         .radio-group-compact label { display: flex; align-items: center; gap: 4px; font-size: 0.95rem; white-space: nowrap; cursor: pointer; }
 
         .main-button-group { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; margin-bottom: 20px; }
-        .main-button-group button { width: 100%; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; word-break: keep-all; border: none; cursor: pointer; }
+        .main-button-group button { width: 100%; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; word-break: keep-all; }
         
         #status-banner {
             display: none; background-color: #ff9800; color: #fff; text-align: center;
@@ -34,16 +35,6 @@
             animation: pulseBanner 1.5s infinite;
         }
         @keyframes pulseBanner { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-
-        /* 결과 지표 배치 최적화 */
-        .ping-metrics-container {
-            display: flex; flex-wrap: wrap; gap: 10px 15px; background: rgba(0,0,0,0.05); padding: 12px; border-radius: 8px; margin-bottom: 15px;
-        }
-        body.dark-theme .ping-metrics-container { background: rgba(0,0,0,0.2); }
-        .ping-item { font-size: 0.85rem; font-weight: 500; color: #444; white-space: nowrap; }
-        body.dark-theme .ping-item { color: #ddd; }
-        .highlight-ms { color: #2e7d32; font-weight: 900; font-size: 1.1em; margin-left: 3px; }
-        body.dark-theme .highlight-ms { color: #00e676; }
 
         .speed-box { background: rgba(0,0,0,0.05); padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: center; }
         body.dark-theme .speed-box { background: rgba(0,0,0,0.2); }
@@ -56,15 +47,15 @@
 <body>
     <div class="container">
         <div class="header-controls">
-            <button id="theme-toggle">🌙</button>
+            <button id="theme-toggle" style="font-size: 1.5rem; background: none; border: none; cursor: pointer;">🌙</button>
         </div>
-        <h1>🌐 로밍 품질 측정 v4.3</h1>
+        <h1>🌐 로밍 품질 측정 v4.6</h1>
         
         <div id="location-info" class="result-item" style="display: flex; justify-content: space-between; align-items: center;">
             <span id="location-text" style="font-size: 0.9em;">📍 Click ⟳ to detect location</span>
-            <button id="refreshLocationBtn" style="padding: 8px 15px;">⟳</button>
+            <button id="refreshLocationBtn" style="padding: 8px 15px; cursor: pointer;">⟳</button>
         </div>
-        <div id="device-info" class="result-item" style="font-size: 0.9em; color: #888;"></div>
+        <div id="device-info" class="result-item" style="font-size: 0.85em; color: #888;"></div>
         
         <div class="selection-group">
             <div class="selection-item">
@@ -74,12 +65,12 @@
             <div class="selection-item">
                 <label for="mnoSelector">통신사 (MNO):</label>
                 <select id="mnoSelector" disabled><option value="">국가를 먼저 선택하세요</option></select>
-                <span id="mno-source" style="font-size: 0.85em; color: #888;"></span>
+                <span id="mno-source" style="font-size: 0.8em; color: #888;"></span>
             </div>
             <div class="selection-item">
                 <label for="ratSelector">네트워크 (RAT):</label>
                 <select id="ratSelector">
-                    <option value="">선택 (Select)</option>
+                    <option value="">선택</option>
                     <option value="5G">5G</option>
                     <option value="LTE">LTE</option>
                     <option value="3G">3G</option>
@@ -87,9 +78,9 @@
                 </select>
             </div>
             <div class="selection-item">
-                <label for="testIdSelector">시험번호 (Test SIM):</label>
+                <label for="testIdSelector">시험번호 (SIM):</label>
                 <select id="testIdSelector">
-                    <option value="">선택 (Select)</option>
+                    <option value="">선택</option>
                     <option value="LG U+">LG U+</option>
                     <option value="SKT">SKT</option>
                     <option value="KT">KT</option>
@@ -98,54 +89,55 @@
                 </select>
             </div>
             <div class="selection-item">
-                <label for="locationInput">장소 (Location - Optional):</label>
+                <label for="locationInput">장소 (Location):</label>
                 <input type="text" id="locationInput" placeholder="예: 호텔 로비">
             </div>
         </div>
 
-        <div class="selection-group" style="background: rgba(0,0,0,0.03); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
-            <h4 style="margin-top: 0; color: #ff9800; font-size: 1.1rem;">⚙️ 네이티브 진단 설정</h4>
+        <div class="selection-group" style="background: rgba(150,150,150,0.05); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+            <h4 style="margin-top: 0; color: #ff9800;">⚙️ iperf3 설정</h4>
             
             <div class="selection-item">
                 <label for="iperfProfile">Stress Profile:</label>
                 <select id="iperfProfile" style="width: 100%;">
-                    <option value="normal" selected>Normal (기본시험: 10Mbps)</option>
-                    <option value="stress_bw">🔥 Extreme (Uplink: 50M)</option>
-                    <option value="stress_dl">🔥 Extreme (Downlink: 50M)</option>
-                    <option value="stress_dual">🔥 Extreme Dual (UL+DL 통합)</option>
+                    <option value="normal" selected>Normal (10M)</option>
+                    <option value="stress_bw">🔥 Extreme (UL: 20M)</option>
+                    <option value="stress_dl">🔥 Extreme (DL: 20M)</option>
+                    <option value="stress_dual">🔥 Extreme Dual (UL+DL 20M)</option>
                     <option value="stress_mtu">📦 MTU Overhead (1460 Byte)</option>
+                    <option value="stress_pps">🔫 Opensignal 모사 (32 Byte)</option>
                 </select>
             </div>
-
-            <div id="advanced-native-toggle" style="text-align: right; color: #888; font-size: 0.9em; cursor: pointer; margin-top: 10px; font-weight: bold;">
+            
+            <div id="advanced-native-toggle" style="text-align: right; color: #888; font-size: 0.85em; cursor: pointer; margin-top: 8px; font-weight: bold;">
                 ▼ 상세 설정 펼치기
             </div>
-
-            <div id="advanced-native-settings" style="display: none; margin-top: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
+            
+            <div id="advanced-native-settings" style="display: none; margin-top: 12px; border-top: 1px solid rgba(150,150,150,0.3); padding-top: 12px;">
                 <div class="selection-item">
-                    <label for="iperfHost">대상 서버 (Target Host):</label>
+                    <label for="iperfHost">서버:</label>
                     <input type="text" id="iperfHost" value="180.228.85.25">
                 </div>
                 <div class="selection-item">
-                    <label for="iperfPort">대상 포트 (Port):</label>
+                    <label for="iperfPort">포트:</label>
                     <input type="number" id="iperfPort" value="5201">
                 </div>
                 <div class="selection-item">
-                    <label>프로토콜 (Protocol):</label>
-                    <div class="radio-group-compact">
-                        <label><input type="radio" name="targetProtocol" value="UDP" checked> UDP</label>
-                        <label><input type="radio" name="targetProtocol" value="TCP"> TCP</label>
+                    <label>프로토콜:</label>
+                    <div style="display: flex; gap: 15px; margin-top: 5px;">
+                        <label style="cursor: pointer;"><input type="radio" name="targetProtocol" value="UDP" checked> UDP</label>
+                        <label style="cursor: pointer;"><input type="radio" name="targetProtocol" value="TCP"> TCP</label>
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button id="iperfButton" style="background-color: #e91e63; color: white; flex: 1; padding: 12px; border-radius:5px;">수동 iperf3</button>
-                    <button id="traceButton" style="background-color: #673ab7; color: white; flex: 1; padding: 12px; border-radius:5px;">수동 traceroute</button>
+                    <button id="iperfButton" style="background-color: #e91e63; color: white; flex: 1; padding: 10px; border:none; border-radius: 5px; cursor:pointer;">수동 iperf3</button>
+                    <button id="traceButton" style="background-color: #673ab7; color: white; flex: 1; padding: 10px; border:none; border-radius: 5px; cursor:pointer;">수동 Trace</button>
                 </div>
             </div>
         </div>
 
         <div class="selection-item" style="margin-bottom: 15px;">
-            <label style="color: #4CAF50; font-weight: bold; font-size: 1.1rem;">⏱️ 측정 횟수 선택:</label>
+            <label style="color: #4CAF50; font-weight: bold;">⏱️ 측정 횟수:</label>
             <div class="radio-group-compact" style="background: rgba(76, 175, 80, 0.1); border-color: #4CAF50;">
                 <label><input type="radio" name="testMode" value="1회_측정" checked> 1회</label>
                 <label><input type="radio" name="testMode" value="3회_연속측정"> 3회</label>
@@ -154,84 +146,61 @@
             </div>
         </div>
 
-        <div id="status-banner">🚀 측정 대기 중...</div>
+        <div id="status-banner">🚀 대기 중...</div>
 
         <div class="main-button-group">
-            <button id="startButton" disabled style="background-color: #4CAF50; color: white;">국가/네트워크를 선택하세요</button>
-            <button id="cancelButton" style="display: none; background-color: #F44336; color: white;">🛑 측정 강제 취소</button>
+            <button id="startButton" disabled style="background-color: #4CAF50; color: white;">입력 완료 시 활성화</button>
+            <button id="cancelButton" style="display: none; background-color: #F44336; color: white;">🛑 취소</button>
         </div>
         
         <hr>
 
         <div id="results">
             <h2>📊 Real-time Results</h2>
-            
             <div class="ping-metrics-container">
                 <div id="ping-result" class="ping-item">서버Ping:<span class="highlight-ms">- ms</span></div>
                 <div id="jitter-result" class="ping-item">Jitter:<span class="highlight-ms">- ms</span></div>
                 <div id="ttfb-result" class="ping-item">TTFB:<span class="highlight-ms">- ms</span></div>
-                <div style="width: 100%; height: 1px; background: rgba(150,150,150,0.3); margin: 2px 0;"></div>
+                <div style="width: 100%; height: 1px; background: rgba(150,150,150,0.2); margin: 2px 0;"></div>
                 <div id="youtube-latency" class="ping-item">YouTube:<span class="highlight-ms">- ms</span></div>
                 <div id="instagram-latency" class="ping-item">Instagram:<span class="highlight-ms">- ms</span></div>
                 <div id="kakaotalk-latency" class="ping-item">Kakao:<span class="highlight-ms">- ms</span></div>
                 <div id="naver-latency" class="ping-item">Naver:<span class="highlight-ms">- ms</span></div>
                 <div id="whatsapp-latency" class="ping-item">WhatsApp:<span class="highlight-ms">- ms</span></div>
             </div>
-
             <div id="download-result" class="speed-box" data-base-text="Download"></div>
             <div id="upload-result" class="speed-box" data-base-text="Upload"></div>
             
-            <div id="shell-result" style="background: #111; color: #00ff00; padding: 12px; font-family: monospace; font-size: 0.82em; white-space: pre-wrap; margin-top: 15px; border-radius: 8px; max-height: 250px; overflow-y: auto; border: 1px solid #444;">
-                > Terminal Output Ready...
+            <div id="shell-result" style="background: #111; color: #00ff00; padding: 12px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; margin-top: 15px; border-radius: 8px; max-height: 250px; overflow-y: auto; border: 1px solid #444;">
+                > Ready...
             </div>
         </div>
 
         <hr>
 
-        <div class="history-controls" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
-            <button id="showHistoryButton" style="padding: 12px;">기록 보기 (Show History)</button>
-            <button id="exportHistoryButton" style="background-color: #2196F3; color: white; padding: 12px; border-radius:5px;">기록 CSV 내보내기</button>
-            <button id="clearHistoryButton" style="background-color: #607D8B; color: white; padding: 12px; border-radius:5px;">기록 전체 삭제</button>
+        <div class="history-controls" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+            <button id="showHistoryButton" style="padding: 12px; border-radius: 5px; border:none; background: #607D8B; color: white; cursor: pointer;">기록 보기 (Show History)</button>
+            <button id="exportHistoryButton" style="background-color: #2196F3; color: white; padding: 12px; border:none; border-radius:5px; cursor: pointer;">CSV 내보내기</button>
+            <button id="clearHistoryButton" style="background-color: #F44336; color: white; padding: 12px; border:none; border-radius:5px; cursor: pointer;">전체 삭제</button>
         </div>
 
         <div id="history-container" style="display:none; margin-top: 20px;">
-            <h2>📝 측정 기록</h2>
             <div class="table-wrapper" style="overflow-x: auto;">
-                <table id="historyTable" style="width: 100%; text-align: center; border-collapse: collapse;">
+                <table id="historyTable" style="width: 100%; text-align: center; border-collapse: collapse; font-size: 0.85rem;">
                     <thead>
-                        <tr style="background: rgba(0,0,0,0.1);">
-                            <th>시간</th>
-                            <th>시험번호</th>
-                            <th>국가</th>
-                            <th>통신사</th>
-                            <th>RAT</th>
-                            <th>Mode</th>
-                            <th>Ping</th>
-                            <th>DL(Mbps)</th>
-                            <th>UL(Mbps)</th>
-                            <th style="min-width: 220px;">Quality Analysis</th>
-                            <th>YouTube</th>
-                            <th>Instagram</th>
-                            <th>Kakao</th>
-                            <th>Naver</th>
-                            <th>WhatsApp</th>
-                            <th>Device</th>
-                            <th>Address</th>
-                            <th>GPS</th>
-                            <th>Manual Loc</th>
-                            <th>Protocol</th>
-                            <th>iperf3</th>
-                            <th>traceroute</th>
+                        <tr style="background: rgba(150,150,150,0.1);">
+                            <th>시간</th><th>ID</th><th>국가</th><th>망</th><th>RAT</th><th>Mode</th><th>Ping</th><th>DL</th><th>UL</th><th style="min-width:180px;">Analysis</th><th>YT</th><th>IG</th><th>Kakao</th><th>Naver</th><th>WA</th><th>Device</th><th>Loc</th><th>GPS</th><th>Manual Loc</th><th>Protocol</th><th>iperf</th><th>trace</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
             </div>
         </div>
-        <footer style="text-align: center; margin-top: 30px; font-size: 0.8em; color: #888;">
+        
+        <footer style="text-align: center; margin-top: 30px; margin-bottom: 20px; font-size: 0.8em; color: #888;">
             웹페이지 관련 문의 : cotworld@gmail.com
         </footer>
     </div>
-    <script src="speedtest.js?v=4.3"></script>
+    <script src="speedtest.js?v=4.6"></script>
 </body>
 </html>

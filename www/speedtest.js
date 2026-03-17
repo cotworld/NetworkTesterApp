@@ -122,7 +122,6 @@ let startButton, cancelButton, countrySelector, mnoSelector, ratSelector, testId
     historyTableBody, locationInput, refreshLocationBtn, locationText, statusBanner;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 📍 1. 테마 변경(다크모드) 완벽 복구 로직
     const themeToggle = document.getElementById('theme-toggle');
     const applyTheme = (theme) => {
         if (theme === 'dark') {
@@ -143,7 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
         applyTheme(isDark ? 'light' : 'dark');
     });
 
-    // 2. UI 요소 바인딩
     startButton = document.getElementById('startButton');
     cancelButton = document.getElementById('cancelButton');
     statusBanner = document.getElementById('status-banner');
@@ -172,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
     locationText = document.getElementById('location-text');
     deviceInfo = document.getElementById('device-info');
 
-    // 기초 데이터 로드
     getDeviceInfo(); loadMnoDatabase(); getLocation(); loadHistory();
 
     countrySelector.addEventListener('change', onCountryChange);
@@ -182,19 +179,32 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshLocationBtn.addEventListener('click', getLocation);
     if(locationInput) locationInput.addEventListener('input', (e) => manualLocationValue = e.target.value);
 
-    // 상세 설정 토글
     const profileEl = document.getElementById('iperfProfile');
     const advancedSettings = document.getElementById('advanced-native-settings');
     const advancedToggle = document.getElementById('advanced-native-toggle');
-    advancedToggle.addEventListener('click', () => {
-        const isHidden = advancedSettings.style.display === 'none';
-        advancedSettings.style.display = isHidden ? 'block' : 'none';
-        advancedToggle.textContent = isHidden ? '▲ 상세 설정 접기' : '▼ 상세 설정 펼치기';
-    });
+    if (advancedToggle) {
+        advancedToggle.addEventListener('click', () => {
+            const isHidden = advancedSettings.style.display === 'none';
+            advancedSettings.style.display = isHidden ? 'block' : 'none';
+            advancedToggle.textContent = isHidden ? '▲ 상세 설정 접기' : '▼ 상세 설정 펼치기';
+        });
+    }
 
-    // 3. 네이티브 버튼 이벤트
+    if (profileEl) {
+        profileEl.addEventListener('change', (e) => {
+            if (['stress_bw', 'stress_dl', 'stress_dual', 'stress_mtu'].includes(e.target.value)) {
+                advancedSettings.style.display = 'block';
+                if(advancedToggle) advancedToggle.textContent = '▲ 상세 설정 접기';
+            }
+        });
+    }
+
     document.getElementById('iperfButton').addEventListener('click', async () => {
-        const args = getIperfArgs(document.querySelector('input[name="targetProtocol"]:checked').value, profileEl.value, document.getElementById('iperfHost').value, document.getElementById('iperfPort').value, '');
+        const protocol = document.querySelector('input[name="targetProtocol"]:checked').value;
+        const profile = profileEl.value;
+        const host = document.getElementById('iperfHost').value;
+        const port = document.getElementById('iperfPort').value;
+        const args = getIperfArgs(protocol, profile, host, port, '');
         await measureNativeTool('iperf3', args, `수동 iperf3`, 35000);
     });
 
@@ -202,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await measureNativeTool('traceroute', document.getElementById('iperfHost').value, `수동 traceroute`, 40000);
     });
 
-    // 4. 메인 루프 실행
     startButton.addEventListener('click', async () => {
         isTestCancelled = false;
         startButton.style.display = 'none'; cancelButton.style.display = 'block'; 
@@ -214,6 +223,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (statusBanner) { statusBanner.style.display = 'block'; statusBanner.style.backgroundColor = '#ff9800'; }
 
+        const updateStatus = (currentI, stepName) => {
+            if (statusBanner) statusBanner.innerHTML = `⏳ [${currentI}/${loopCount}회차] <br> ${stepName} 측정 중...`;
+            const shellEl = document.getElementById('shell-result');
+            if (shellEl) shellEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        };
+
         for (let i = 1; i <= loopCount; i++) {
             if (isTestCancelled) break;
             if (speedtestWorker) speedtestWorker.terminate();
@@ -221,11 +236,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             [pingResult, jitterResult, ttfbResult, downloadResult, uploadResult, youtubeLatency, instagramLatency, kakaotalkLatency, naverLatency, whatsappLatency].forEach(el => el.innerHTML = '');
 
-            if (statusBanner) statusBanner.innerHTML = `⏳ [${i}/${loopCount}회차] <br> 네트워크 응답성 측정 중...`;
+            updateStatus(i, "Ping/Jitter/TTFB");
             const q = await measureLatencyAndJitter();
+            if (isTestCancelled) break;
+
+            updateStatus(i, "Download Speed");
             const dl = await measureSpeedWithWorker('download');
+            if (isTestCancelled) break;
+
+            updateStatus(i, "Upload Speed");
             const ul = await measureSpeedWithWorker('upload');
-            
+            if (isTestCancelled) break;
+
+            updateStatus(i, "Service Latency");
             const services = [
                 { name: 'YouTube', url: 'https://www.youtube.com', element: youtubeLatency },
                 { name: 'Instagram', url: 'https://www.instagram.com', element: instagramLatency },
@@ -236,39 +259,64 @@ document.addEventListener('DOMContentLoaded', () => {
             const sResults = {};
             for(let s of services) { sResults[s.name] = await measureServiceLatency(s.url, s.element, s.name); if(isTestCancelled) break; }
 
-            let iperfFullLog = "";
+            let iperfLog = "";
+            const combinedLabel = `${protocol} (${profile})`;
             if (profile === 'stress_dual') {
-                if (statusBanner) statusBanner.innerHTML = `⏳ [${i}/${loopCount}회차] <br> iperf3 UL 부하 측정...`;
+                updateStatus(i, "iperf3 [Uplink]");
                 const ulRes = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, 'UL'), `자동 iperf3 (UL)`, 35000);
-                if (statusBanner) statusBanner.innerHTML = `⏳ [${i}/${loopCount}회차] <br> iperf3 DL 부하 측정...`;
+                updateStatus(i, "iperf3 [Downlink]");
                 const dlRes = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, 'DL'), `자동 iperf3 (DL)`, 35000);
-                iperfFullLog = `[UL]\n${ulRes}\n\n[DL]\n${dlRes}`;
+                iperfLog = `[UL]\n${ulRes}\n\n[DL]\n${dlRes}`;
             } else {
-                if (statusBanner) statusBanner.innerHTML = `⏳ [${i}/${loopCount}회차] <br> iperf3 부하 측정...`;
-                iperfFullLog = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, ''), `자동 iperf3`, 35000);
+                updateStatus(i, "iperf3 Load Test");
+                iperfLog = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, ''), `자동 iperf3`, 35000);
             }
 
+            updateStatus(i, "traceroute Path");
             const traceLog = await measureNativeTool('traceroute', host, `자동 traceroute`, 40000);
-            
+
+            const combinedQuality = `J:${q.jitter}ms / T:${q.ttfb}ms`;
+
             const resData = {
                 time: new Date().toLocaleString('ko-KR', { hourCycle: 'h23' }),
-                testId: testIdSelector.value, country: countrySelector.options[countrySelector.selectedIndex].text, mno: mnoSelector.value, rat: ratSelector.value, testMode: i + "/" + loopCount,
-                ping_avg: q.avg, download: dl, upload: ul, packetLoss: `J:${q.jitter}ms / T:${q.ttfb}ms`,
+                testId: testIdSelector.value, country: countrySelector.options[countrySelector.selectedIndex].text, mno: mnoSelector.value, rat: ratSelector.value, testMode: selectedMode,
+                ping_avg: q.avg, download: dl, upload: ul, packetLoss: combinedQuality, 
                 youtube: sResults.YouTube, instagram: sResults.Instagram, kakao: sResults.Kakao, naver: sResults.Naver, whatsapp: sResults.WhatsApp,
-                device: currentDeviceInfo, location: currentAddress, gps: currentGpsCoords, manualLocation: manualLocationValue, protocol: `${protocol} (${profile})`, 
-                iperf3_log: iperfFullLog, // 📍 measureNativeTool에서 이미 압축된 로그가 반환됨
-                traceroute_log: traceLog
+                device: currentDeviceInfo, location: currentAddress, gps: currentGpsCoords, manualLocation: manualLocationValue, protocol: combinedLabel, iperf3_log: iperfLog, traceroute_log: traceLog
             };
 
             saveHistory(resData); logResultToServer(resData); loadHistory();
-            if (i < loopCount && !isTestCancelled) await new Promise(r => setTimeout(r, 2000));
+            if (i < loopCount && !isTestCancelled) { updateStatus(i, "Wait for next..."); await new Promise(r => setTimeout(r, 2000)); }
         }
-        if (!isTestCancelled && statusBanner) { statusBanner.style.backgroundColor = '#4CAF50'; statusBanner.innerHTML = '✅ 측정 완료!'; setTimeout(() => statusBanner.style.display = 'none', 4000); }
+        if (!isTestCancelled && statusBanner) { statusBanner.style.backgroundColor = '#4CAF50'; statusBanner.innerHTML = '✅ 완료!'; setTimeout(() => statusBanner.style.display = 'none', 4000); }
         startButton.style.display = 'block'; cancelButton.style.display = 'none';
+    });
+
+    showHistoryButton.addEventListener('click', () => { historyContainer.style.display = historyContainer.style.display === 'none' ? 'block' : 'none'; showHistoryButton.textContent = historyContainer.style.display === 'none' ? '기록 보기' : '기록 숨기기'; });
+    clearHistoryButton.addEventListener('click', () => { if (confirm('기록을 삭제합니까?')) { localStorage.removeItem('speedtestHistory'); loadHistory(); } });
+    
+    exportHistoryButton.addEventListener('click', () => {
+        const history = JSON.parse(localStorage.getItem('speedtestHistory')) || [];
+        if (history.length === 0) return alert('내보낼 기록이 없습니다.');
+        const headers = ["time", "testId", "country", "mno", "rat", "testMode", "ping_avg", "download", "upload", "packetLoss", "youtube", "instagram", "kakao", "naver", "whatsapp", "manualLocation", "device", "location", "gps", "protocol", "iperf3_log", "traceroute_log"];
+        let csvContent = headers.join(',') + '\n';
+        history.forEach(row => {
+            const values = headers.map(header => `"${('' + (row[header] || '')).replace(/"/g, '""')}"`);
+            csvContent += values.join(',') + '\n';
+        });
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `speedtest_result_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    });
+
+    cancelButton.addEventListener('click', () => {
+        isTestCancelled = true; cancelButton.disabled = true;
+        if (statusBanner) { statusBanner.style.backgroundColor = '#F44336'; statusBanner.innerHTML = '🛑 측정이 강제 취소되었습니다.'; setTimeout(() => statusBanner.style.display = 'none', 3000); }
+        if (speedtestWorker) speedtestWorker.terminate();
     });
 });
 
-// 📍 엑셀 행 크기 방지를 위한 로그 압축 함수
+// 📍 구글 시트 전송용 로그 요약 (OOO 문구 포함되도록 필터링 강화)
 function compressIperfLog(rawLog) {
     const lines = rawLog.split('\n');
     let summaryLines = lines.filter(line => 
@@ -276,59 +324,92 @@ function compressIperfLog(rawLog) {
         line.includes('iperf3 (opensignal') || 
         line.includes('- 분석') || 
         line.includes('- 전체') || 
+        line.includes('- 순수 유실') || 
+        line.includes('- 순서 뒤바뀜') || 
         line.includes('- 최종') || 
         line.includes('- 📢') || 
-        line.includes('[UL]') ||
-        line.includes('[DL]') ||
+        line.includes('[UL]') || 
+        line.includes('[DL]') || 
         line.includes('Error') || 
         line.includes('Timeout')
     );
     return summaryLines.join('\n') || "Log Summary Error";
 }
 
+// 📍 방화벽 회피를 위해 병렬(-P 5)을 빼고, 3사 공통 비교를 위해 대역폭을 20M로 하향
 function getIperfArgs(protocol, profile, host, port, forcedMode) {
     let args = `-c ${host} -p ${port} -t 10`;
-    if (protocol === 'UDP') args += ' -u';
-    if (profile === 'stress_bw') args += (protocol === 'UDP' ? ' -b 50M -P 5' : ' -P 5');
-    else if (profile === 'stress_dl') args += (protocol === 'UDP' ? ' -b 50M -P 5 -R' : ' -P 5 -R');
-    else if (profile === 'stress_dual') args += (protocol === 'UDP' ? ' -b 50M -P 5' : ' -P 5'); 
-    else if (profile === 'stress_mtu') args += (protocol === 'UDP' ? ' -b 20M -l 1460 -R' : ' -M 1460 -R');
-    else args += (protocol === 'UDP' ? ' -b 10M' : '');
-    if (forcedMode === 'DL' && !args.includes('-R')) args += ' -R';
+    
+    if (protocol === 'UDP') {
+        args += ' -u';
+        // 병렬 옵션을 완전히 제거하고 단일 스트림으로 20M 전송
+        if (profile === 'stress_bw' || profile === 'stress_dl' || profile === 'stress_dual') args += ' -b 20M';
+        else if (profile === 'stress_mtu') args += ' -b 20M -l 1460';
+        else if (profile === 'stress_pps') args += ' -b 1M -l 32';
+        else args += ' -b 10M';
+    } else {
+        if (profile === 'stress_bw' || profile === 'stress_dl' || profile === 'stress_dual') args += ' -P 5';
+        else if (profile === 'stress_mtu') args += ' -M 1460';
+    }
+
+    if ((profile === 'stress_dl' || forcedMode === 'DL') && !args.includes('-R')) args += ' -R';
     if (forcedMode === 'UL' && args.includes('-R')) args = args.replace(' -R', '');
+    
     return args;
 }
 
+// 📍 네이티브 명령 실행 및 Opensignal 재계산 (OOO 명시 추가)
 async function measureNativeTool(cmd, args, label, timeoutMs) {
     const outputEl = document.getElementById('shell-result');
-    if (window.Capacitor?.Plugins?.ShellExecutor) {
+    if (!outputEl) return "UI Element Not Found";
+
+    outputEl.style.color = '#ffca28';
+    outputEl.textContent = `⏳ [${label}] 진행 중...\n> ${cmd} ${args}\n서버 응답 대기 중...`;
+
+    if (window.Capacitor && window.Capacitor.Plugins.ShellExecutor) {
         try {
             const execPromise = window.Capacitor.Plugins.ShellExecutor.runCommand({ command: cmd, args: args });
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), timeoutMs));
             const { result } = await Promise.race([execPromise, timeoutPromise]);
+            
             let finalResult = result;
 
             if (cmd === 'iperf3' && result.includes('Lost/Total')) {
-                const lines = result.split('\n');
-                const sumLine = lines.reverse().find(l => l.includes('[SUM]') && (l.includes('receiver') || l.includes('0/')));
-                const match = sumLine ? sumLine.match(/(\d+)\/(\d+)\s+\(/) : result.match(/(\d+)\/(\d+)\s+\(/);
-                const oooMatch = result.match(/(\d+)\s+datagrams\s+received\s+out-of-order/);
-                const ooo = oooMatch ? parseInt(oooMatch[1], 10) : 0;
-                if (match) {
-                    const lost = parseInt(match[1], 10), total = parseInt(match[2], 10), discarded = lost + ooo;
-                    const osLoss = total > 0 ? ((discarded/total)*100).toFixed(2) : 0;
-                    finalResult += `\n\niperf3 (opensignal 판단기준 적용) : \n- 분석구간: ${sumLine && sumLine.includes('receiver') ? 'DL' : 'UL'}\n- 전체 패킷: ${total}\n- 최종 손실(Lost+OOO): ${discarded}\n- 📢 재계산 유실률: ${osLoss}%`;
-                }
+                try {
+                    const lines = result.split('\n');
+                    const sumLine = lines.reverse().find(l => l.includes('[SUM]') && (l.includes('receiver') || l.includes('0/')));
+                    const match = sumLine ? sumLine.match(/(\d+)\/(\d+)\s+\(/) : result.match(/(\d+)\/(\d+)\s+\(/);
+                    const oooMatch = result.match(/(\d+)\s+datagrams\s+received\s+out-of-order/);
+                    const ooo = oooMatch ? parseInt(oooMatch[1], 10) : 0;
+                    
+                    const isDlTest = args.includes('-R');
+
+                    if (match) {
+                        const lost = parseInt(match[1], 10), total = parseInt(match[2], 10), discarded = lost + ooo;
+                        const osLoss = total > 0 ? ((discarded/total)*100).toFixed(2) : 0;
+                        finalResult += `\n\n--------------------------------------\n` +
+                                     `iperf3 (opensignal 판단기준 적용) : \n` +
+                                     `- 분석구간: ${isDlTest ? 'DL(수신)' : 'UL(송신)'}\n` +
+                                     `- 전체 패킷: ${total.toLocaleString()}개\n` +
+                                     `- 순수 유실: ${lost.toLocaleString()}개\n` +
+                                     `- 순서 뒤바뀜(OOO): ${ooo.toLocaleString()}개\n` +
+                                     `- 최종 손실(Lost+OOO): ${discarded.toLocaleString()}개\n` +
+                                     `- 📢 재계산 유실률: ${osLoss}%\n` +
+                                     `--------------------------------------`;
+                    }
+                } catch (e) { finalResult += `\n\n[Opensignal Analysis Failed]`; }
             }
-            
-            // 앱 화면에는 전체 로그 출력
+
+            outputEl.style.color = '#00ff00';
             outputEl.textContent = `✅ [${label} 완료]\n${finalResult}`;
             
-            // 📍 구글 시트 및 히스토리용으로는 압축된 로그 반환
             return cmd === 'iperf3' ? compressIperfLog(finalResult) : finalResult; 
-        } catch (e) { return "Error: " + e.message; }
-    }
-    return "App Only";
+        } catch (e) {
+            outputEl.style.color = '#ff5252';
+            outputEl.textContent = `❌ [${label} 오류]: ${e.message}`;
+            return "Error: " + e.message;
+        }
+    } else { return "⚠️ 앱에서만 지원합니다."; }
 }
 
 async function measureLatencyAndJitter() {
@@ -352,74 +433,86 @@ async function measureLatencyAndJitter() {
 }
 
 async function measureServiceLatency(url, element, name) {
+    if (!element) return 'N/A';
     const times = [];
     for (let i = 0; i < 3; i++) {
         try {
             const start = Date.now();
-            await fetch(`${url}?r=${Math.random()}`, { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(3000) });
-            times.push(Date.now() - start); await new Promise(r => setTimeout(r, 400));
-        } catch (e) { element.innerHTML = `${name}:<span class="highlight-ms" style="color:red;">Fail</span>`; return 'Failed'; }
+            await fetch(`${url}?r=${Date.now()}`, { mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(3000) });
+            times.push(Date.now() - start); await new Promise(r => setTimeout(r, 500));
+        } catch (e) { return 'Failed'; }
     }
-    const avg = Math.round(times.slice(1).reduce((a,b)=>a+b,0)/2);
-    element.innerHTML = `${name}:<span class="highlight-ms">${avg} ms</span>`;
+    const avg = Math.round(times.slice(1).reduce((a, b) => a + b, 0) / (times.length - 1));
+    element.innerHTML = `✅ ${name}: <span class="speed-result-value">${avg} ms</span>`;
     return avg;
 }
 
 function createOrUpdateProgressBar(el, prg, spd) {
-    if (!el.querySelector('.progress-container')) el.innerHTML = '<div class="progress-container" style="margin-top:5px; background:rgba(150,150,150,0.3); border-radius:4px; overflow:hidden;"><div class="progress-bar" style="height:8px; background:#2196F3; width:0%; transition: width 0.2s;"></div></div><div class="progress-text" style="font-size:0.85em; margin-top:3px; color:#888;"></div>';
-    el.querySelector('.progress-bar').style.width = `${prg * 100}%`; 
-    el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
+    if (!el.querySelector('.progress-container')) el.innerHTML = '<div class="progress-container"><div class="progress-bar"></div><div class="progress-text"></div></div>';
+    el.querySelector('.progress-bar').style.width = `${prg * 100}%`; el.querySelector('.progress-text').textContent = `${(prg * 100).toFixed(0)}% @ ${spd} Mbps`;
 }
 
 async function measureSpeedWithWorker(type) {
-    const el = (type === 'download') ? downloadResult : uploadResult;
-    const baseText = el.dataset.baseText;
-    const colorClass = type === 'download' ? '' : 'speed-large-value-up';
-    el.innerHTML = `<span style="font-size:1em; font-weight:bold;">${baseText}</span>`;
-    createOrUpdateProgressBar(el, 0, '0.00');
+    const element = (type === 'download') ? downloadResult : uploadResult;
+    const baseText = element.dataset ? element.dataset.baseText || (type === 'download' ? 'Download Speed' : 'Upload Speed') : (type === 'download' ? 'Download' : 'Upload');
+    createOrUpdateProgressBar(element, 0, '0.00');
     return new Promise((resolve) => {
-        const fbTimer = setTimeout(() => { el.innerHTML = `⚠️ ${baseText}: Timeout`; speedtestWorker.terminate(); resolve('Timeout'); }, 25000);
+        if(!speedtestWorker) { resolve('Error'); return; }
+        const fallbackTimer = setTimeout(() => { element.innerHTML = `⚠️ ${baseText}: Timeout`; speedtestWorker.terminate(); resolve('Timeout'); }, 25000);
         const handler = (event) => {
-            if (isTestCancelled) { clearTimeout(fbTimer); speedtestWorker.removeEventListener('message', handler); resolve('Cancelled'); return; }
-            const { type: mType, progress, speed, finalSpeed } = event.data;
-            if (mType === 'progress') createOrUpdateProgressBar(el, progress, speed);
-            if (mType === 'complete') { clearTimeout(fbTimer); el.innerHTML = `<span style="font-size:1em; font-weight:bold;">${baseText}</span> <span class="speed-large-value ${colorClass}">${finalSpeed} Mbps</span>`; speedtestWorker.removeEventListener('message', handler); resolve(finalSpeed); }
-            if (mType === 'error') { clearTimeout(fbTimer); el.innerHTML = `❌ ${baseText}: Failed`; speedtestWorker.removeEventListener('message', handler); resolve('Failed'); }
+            if (isTestCancelled) { clearTimeout(fallbackTimer); speedtestWorker.removeEventListener('message', handler); resolve('Cancelled'); return; }
+            const { type: msgType, progress, speed, finalSpeed } = event.data;
+            if (msgType === 'progress') createOrUpdateProgressBar(element, progress, speed);
+            if (msgType === 'complete') { clearTimeout(fallbackTimer); element.innerHTML = `✅ ${baseText}: <span class="speed-result-value">${finalSpeed} Mbps</span>`; speedtestWorker.removeEventListener('message', handler); resolve(finalSpeed); }
+            if (msgType === 'error') { clearTimeout(fallbackTimer); element.innerHTML = `❌ ${baseText}: Failed`; speedtestWorker.removeEventListener('message', handler); resolve('Failed'); }
         };
         speedtestWorker.addEventListener('message', handler);
         speedtestWorker.postMessage({ type: (type === 'download' ? 'start-download' : 'start-upload'), url: (type === 'download' ? SERVER_URL + '/download.php' : SERVER_URL + '/upload.php'), size: 10 * 1024 * 1024 });
     });
 }
 
-async function logResultToServer(data) { try { await fetch("https://script.google.com/macros/s/AKfycby7PrdmKFxAIuYRgw3mzQQpZIEy6zqU7YVLkVB3Hu1wDw07KVqZArZOti1M7a3g6_X2/exec", { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) }); } catch (e) { } }
+async function logResultToServer(resultData) {
+    const url = "https://script.google.com/macros/s/AKfycby7PrdmKFxAIuYRgw3mzQQpZIEy6zqU7YVLkVB3Hu1wDw07KVqZArZOti1M7a3g6_X2/exec"; 
+    try { await fetch(url, { method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify(resultData) }); } catch (e) { }
+}
+
 function loadMnoDatabase() { fetch('./mno.json?v=' + Date.now()).then(res => res.json()).then(data => { fullMnoDatabase = data; isDbLoadedFromWeb = true; updateCountryList(); }).catch(() => { fullMnoDatabase = Object.fromEntries(Object.entries(fallbackMnoDatabase).map(([c, d]) => [c, d.mnos.map(b => ({ brand: b, country: d.name }))])); updateCountryList(); }); }
-function updateCountryList() { const list = Object.keys(fullMnoDatabase).map(c => ({ code: c, name: fallbackMnoDatabase[c]?.name || c.toUpperCase() })).sort((a,b) => a.name.localeCompare(b.name)); countrySelector.innerHTML = '<option value="">국가 선택</option>'; list.forEach(c => countrySelector.appendChild(new Option(`${c.name} (${c.code.toUpperCase()})`, c.code))); countrySelector.disabled = false; checkSelections(); }
-function onCountryChange() { const code = countrySelector.value; mnoSelector.innerHTML = '<option value="">통신사 선택</option>'; if (code && fullMnoDatabase[code]) { let brands = [...new Set(fullMnoDatabase[code].map(i => i.brand))]; brands.sort().forEach(b => mnoSelector.appendChild(new Option(b, b))); mnoSelector.disabled = false; } checkSelections(); }
-function checkSelections() { startButton.disabled = !(countrySelector.value && mnoSelector.value && ratSelector.value && testIdSelector.value); if (!startButton.disabled) startButton.textContent = 'Start Test'; }
+function updateCountryList() { const list = Object.keys(fullMnoDatabase).map(c => ({ code: c, name: fallbackMnoDatabase[c]?.name || c.toUpperCase() })).sort((a,b) => a.name.localeCompare(b.name)); countrySelector.innerHTML = '<option value="">국가를 선택하세요</option>'; list.forEach(c => countrySelector.appendChild(new Option(`${c.name} (${c.code.toUpperCase()})`, c.code))); countrySelector.disabled = false; checkSelections(); }
+function onCountryChange() { const code = countrySelector.value; mnoSelector.innerHTML = '<option value="">통신사를 선택하세요</option>'; mnoSource.textContent = ''; if (code && fullMnoDatabase[code]) { let brands = [...new Set(fullMnoDatabase[code].map(i => i.brand))]; if (code === 'kr') brands.sort((a, b) => ['LG U+', 'SK Telecom', 'KT'].indexOf(a) - ['LG U+', 'SK Telecom', 'KT'].indexOf(b)); else brands.sort(); brands.forEach(b => mnoSelector.appendChild(new Option(b, b))); mnoSelector.disabled = false; mnoSource.textContent = isDbLoadedFromWeb ? '(Live DB)' : '(내장 DB)'; } else { mnoSelector.disabled = true; } checkSelections(); }
+function checkSelections() { startButton.disabled = !(countrySelector.value && mnoSelector.value && ratSelector.value && testIdSelector.value); if (!startButton.disabled) startButton.textContent = 'Start Test'; else startButton.textContent = 'Select Country, MNO, RAT, Test SIM'; }
 
 async function getLocation() {
+    locationText.innerHTML = `📍 Detecting location...`; refreshLocationBtn.disabled = true;
+    if (!navigator.geolocation) { locationText.innerHTML = '⚠️ Geolocation not supported'; return; }
     try {
         const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 }));
         currentGpsCoords = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&accept-language=en`);
         const data = await res.json();
+        let addressStr = 'Unknown';
         if (data.address) {
-            currentAddress = `${data.address.country || ''}, ${data.address.city || data.address.town || ''}`;
-            const detectedCode = data.address.country_code?.toLowerCase();
-            if (detectedCode && countrySelector.querySelector(`option[value="${detectedCode}"]`)) { countrySelector.value = detectedCode; countrySelector.classList.add('auto-filled'); onCountryChange(); }
+            addressStr = `${data.address.country || ''}, ${data.address.city || data.address.town || ''}`;
+            if (data.address.country_code) {
+                const detectedCode = data.address.country_code.toLowerCase();
+                if (countrySelector.querySelector(`option[value="${detectedCode}"]`)) { countrySelector.value = detectedCode; onCountryChange(); }
+            }
         }
-        locationText.innerHTML = `📍 GPS: ${currentGpsCoords}<br>🏠 Address: ${currentAddress}`;
-    } catch (e) {}
+        currentAddress = addressStr; locationText.innerHTML = `📍 GPS: ${currentGpsCoords}<br>🏠 Address: ${currentAddress}`;
+    } catch (e) { locationText.innerHTML = '⚠️ 위치 감지 실패'; currentGpsCoords = 'N/A'; } finally { refreshLocationBtn.disabled = false; refreshLocationBtn.textContent = '⟳'; }
 }
 
 async function getDeviceInfo() {
+    let info = 'Unknown';
     try {
-        if (navigator.userAgentData?.getHighEntropyValues) {
-            const data = await navigator.userAgentData.getHighEntropyValues(['model']);
-            currentDeviceInfo = `${navigator.userAgentData.platform} ${data.model || ''}`.trim();
-        } else { const m = navigator.userAgent.match(/Android\s([0-9.]+)/); currentDeviceInfo = m ? `Android ${m[1]}` : 'Android'; }
-    } catch(e) {}
-    deviceInfo.innerHTML = `📱 Device: ${currentDeviceInfo}`;
+        if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+            const data = await navigator.userAgentData.getHighEntropyValues(['platformVersion', 'model']);
+            info = `${navigator.userAgentData.platform} ${data.platformVersion ? data.platformVersion.split('.')[0] : ''} ${data.model || ''}`.trim();
+        } else throw new Error('Fallback');
+    } catch(e) { 
+        if (/Android/.test(navigator.userAgent)) { const m = navigator.userAgent.match(/Android\s([0-9.]+)/); info = m ? `Android ${m[1]}` : 'Android'; }
+        else info = 'Other';
+    }
+    currentDeviceInfo = info; deviceInfo.innerHTML = `📱 Device: ${currentDeviceInfo}`;
 }
 
 function saveHistory(res) { let h = JSON.parse(localStorage.getItem('speedtestHistory')) || []; h.unshift(res); localStorage.setItem('speedtestHistory', JSON.stringify(h)); }
@@ -427,19 +520,32 @@ function loadHistory() {
     const h = JSON.parse(localStorage.getItem('speedtestHistory')) || []; historyTableBody.innerHTML = h.length ? '' : '<tr><td colspan="22">No History</td></tr>';
     h.forEach(r => {
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${r.time}</td><td>${r.testId}</td><td>${r.country}</td><td>${r.mno}</td><td>${r.rat}</td><td>${r.testMode}</td><td>${r.ping_avg}</td><td>${r.download}</td><td>${r.upload}</td><td>${r.packetLoss}</td><td>${r.youtube}</td><td>${r.instagram}</td><td>${r.kakao}</td><td>${r.naver}</td><td>${r.whatsapp}</td><td>${r.device}</td><td>${r.location}</td><td>${r.gps}</td><td>${r.manualLocation}</td><td><b>${r.protocol}</b></td><td>${r.iperf3_log ? "✅" : "❌"}</td><td>${r.traceroute_log ? "✅" : "❌"}</td>`;
+        const iperfStatus = r.iperf3_log && !r.iperf3_log.includes("Error") && !r.iperf3_log.includes("Timeout") ? "✅" : "❌";
+        const traceStatus = r.traceroute_log && !r.traceroute_log.includes("Error") && !r.traceroute_log.includes("Timeout") ? "✅" : "❌";
+        row.innerHTML = `<td>${r.time}</td><td>${r.testId || 'N/A'}</td><td>${r.country}</td><td>${r.mno}</td><td>${r.rat}</td><td>${r.testMode}</td><td>${r.ping_avg}</td><td>${r.download}</td><td>${r.upload}</td><td>${r.packetLoss || '-'}</td><td>${r.youtube || ''}</td><td>${r.instagram || ''}</td><td>${r.kakao || ''}</td><td>${r.naver || ''}</td><td>${r.whatsapp || ''}</td><td>${r.device}</td><td>${r.location}</td><td>${r.gps || ''}</td><td>${r.manualLocation || ''}</td><td><b>${r.protocol}</b></td><td>${iperfStatus}</td><td>${traceStatus}</td>`;
         historyTableBody.appendChild(row);
     });
 }
 
 async function fetchNetworkInfoWithRetry(retryCount = 0) {
-    if (retryCount > 10 || !window.Capacitor?.Plugins?.NetworkInfo) return; 
-    try {
-        const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
-        if (info.hplmnName) { testIdSelector.value = info.hplmnName; testIdSelector.classList.add('auto-filled'); }
-        if (info.rat) { ratSelector.value = info.rat; ratSelector.classList.add('auto-filled'); }
-        if (info.operatorName) mnoSource.innerText = ` (현재: ${info.operatorName})`;
-        checkSelections();
-    } catch (e) { setTimeout(() => fetchNetworkInfoWithRetry(retryCount + 1), 1000); }
+    if (retryCount > 10) return; 
+    if (window.Capacitor && window.Capacitor.Plugins.NetworkInfo) {
+        try {
+            const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
+            const testIdSel = document.getElementById('testIdSelector');
+            if (testIdSel && info.hplmnName) testIdSel.value = info.hplmnName; 
+            const ratSel = document.getElementById('ratSelector');
+            if (ratSel && info.rat) ratSel.value = info.rat;
+            const mnoSource = document.getElementById('mno-source');
+            if (mnoSource && info.operatorName) mnoSource.innerText = ` (현재: ${info.operatorName})`;
+
+            if (info.hplmnName || info.rat) {
+                if (typeof checkSelections === 'function') checkSelections();
+                return; 
+            }
+        } catch (e) { }
+    }
+    setTimeout(() => fetchNetworkInfoWithRetry(retryCount + 1), 1000);
 }
-window.addEventListener('load', fetchNetworkInfoWithRetry);
+
+window.addEventListener('load', () => { fetchNetworkInfoWithRetry(); });
