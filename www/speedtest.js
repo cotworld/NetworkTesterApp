@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (profileEl) {
         profileEl.addEventListener('change', (e) => {
-            if (['stress_bw', 'stress_dl', 'stress_dual', 'stress_mtu'].includes(e.target.value)) {
+            if (['stress_bw', 'stress_dl', 'stress_dual', 'stress_mtu', 'stress_pps'].includes(e.target.value)) {
                 advancedSettings.style.display = 'block';
                 if(advancedToggle) advancedToggle.textContent = '▲ 상세 설정 접기';
             }
@@ -216,7 +216,6 @@ document.addEventListener('DOMContentLoaded', () => {
         isTestCancelled = false;
         startButton.style.display = 'none'; cancelButton.style.display = 'block'; 
         
-        // 📍 1. 변수 누락으로 인한 앱 멈춤 문제 해결
         const selectedMode = document.querySelector('input[name="testMode"]:checked').value;
         const loopCount = parseInt(selectedMode.split('회')[0], 10);
         
@@ -265,11 +264,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let iperfLog = "";
             const combinedLabel = `${protocol} (${profile})`;
-            if (profile === 'stress_dual') {
-                updateStatus(i, "iperf3 [Uplink]");
+            
+            // 📍 핵심 변경점: MTU 및 PPS 모드도 Dual 모드처럼 UL/DL 순차 측정하도록 배열 조건 추가
+            const dualProfiles = ['stress_dual', 'stress_mtu', 'stress_pps'];
+            
+            if (dualProfiles.includes(profile)) {
+                updateStatus(i, `iperf3 [Uplink - ${profile}]`);
                 const ulRes = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, 'UL'), `자동 iperf3 (UL)`, 35000);
                 if (isTestCancelled) break;
-                updateStatus(i, "iperf3 [Downlink]");
+                updateStatus(i, `iperf3 [Downlink - ${profile}]`);
                 const dlRes = await measureNativeTool('iperf3', getIperfArgs(protocol, profile, host, port, 'DL'), `자동 iperf3 (DL)`, 35000);
                 iperfLog = `[UL]\n${ulRes}\n\n[DL]\n${dlRes}`;
             } else {
@@ -461,7 +464,6 @@ async function measureSpeedWithWorker(type) {
     createOrUpdateProgressBar(element, 0, '0.00');
     return new Promise((resolve) => {
         if(!speedtestWorker) { resolve('Error'); return; }
-        // 📍 3. 속도측정 강제 타임아웃 120초(120000ms)로 대폭 상향
         const fallbackTimer = setTimeout(() => { element.innerHTML = `⚠️ ${baseText}: Timeout`; speedtestWorker.terminate(); resolve('Timeout'); }, 120000);
         const handler = (event) => {
             if (isTestCancelled) { clearTimeout(fallbackTimer); speedtestWorker.removeEventListener('message', handler); resolve('Cancelled'); return; }
@@ -500,7 +502,6 @@ async function getLocation() {
                 const detectedCode = data.address.country_code.toLowerCase();
                 if (countrySelector.querySelector(`option[value="${detectedCode}"]`)) { 
                     countrySelector.value = detectedCode; 
-                    // 📍 2. 국가 자동 선택 시 음영 복구
                     countrySelector.classList.add('auto-filled'); 
                     onCountryChange(); 
                 }
@@ -544,7 +545,6 @@ async function fetchNetworkInfoWithRetry(retryCount = 0) {
         try {
             const info = await window.Capacitor.Plugins.NetworkInfo.getDetail();
             const testIdSel = document.getElementById('testIdSelector');
-            // 📍 2. 시험번호/망 자동 감지 시 음영 복구
             if (testIdSel && info.hplmnName) {
                 testIdSel.value = info.hplmnName; 
                 testIdSel.classList.add('auto-filled');
